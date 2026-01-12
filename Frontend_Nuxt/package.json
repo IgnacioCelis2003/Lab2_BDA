@@ -1,0 +1,23 @@
+{
+  "name": "Frontend",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@nuxt/eslint": "^1.10.0",
+    "@picocss/pico": "^2.1.1",
+    "@types/jsonwebtoken": "^9.0.10",
+    "eslint": "^9.39.1",
+    "jsonwebtoken": "^9.0.2",
+    "leaflet": "^1.9.4",
+    "nuxt": "^4.2.0",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
+  }
+}
