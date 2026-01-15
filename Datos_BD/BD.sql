@@ -66,18 +66,16 @@ CREATE TABLE IF NOT EXISTS misiones (
     fecha_inicio_real TIMESTAMP,
     fecha_fin_real TIMESTAMP,
     estado estado_mision NOT NULL DEFAULT 'Pendiente',
-    -- Usamos GEOGRAPHY para almacenar una LÍNEA (ruta)
-    -- 4326 es el estándar para coordenadas WGS 84 (lat/lon)
-    ruta GEOGRAPHY(LINESTRING, 4326), 
-    CONSTRAINT fk_dron
-        FOREIGN KEY(id_dron_asignado) 
-        REFERENCES drones(id_dron),
-    CONSTRAINT fk_tipo_mision
-        FOREIGN KEY(id_tipo_mision) 
-        REFERENCES tipos_mision(id_tipo_mision),
-    CONSTRAINT fk_operador
-        FOREIGN KEY(id_operador_creador) 
-        REFERENCES usuarios(id_usuario)
+    
+    LINESTRINGZ (La Z indica 3D)
+    ruta GEOGRAPHY(LINESTRINGZ, 4326), 
+    
+    -- Indice para rastrear el progreso en la ruta
+    ultimo_indice_ruta INT DEFAULT 0, 
+
+    CONSTRAINT fk_dron FOREIGN KEY(id_dron_asignado) REFERENCES drones(id_dron),
+    CONSTRAINT fk_tipo_mision FOREIGN KEY(id_tipo_mision) REFERENCES tipos_mision(id_tipo_mision),
+    CONSTRAINT fk_operador FOREIGN KEY(id_operador_creador) REFERENCES usuarios(id_usuario)
 );
 
 -- Tabla de Registro de Vuelo (Telemetría) 
@@ -85,15 +83,20 @@ CREATE TABLE IF NOT EXISTS registro_vuelo (
     id_registro_vuelo BIGSERIAL PRIMARY KEY,
     id_mision INT NOT NULL,
     "timestamp" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    -- Usamos GEOGRAPHY para almacenar un PUNTO
-    coordenadas GEOGRAPHY(POINT, 4326) NOT NULL,
-    altitud_msnm NUMERIC(7, 2), -- Metros sobre nivel del mar
+    
+    -- POINTZ incluye Lat, Lon y Altura
+    coordenadas GEOGRAPHY(POINTZ, 4326) NOT NULL,
+    
+    -- Mantenemos esto para facilitar lecturas simples para el frontend
+    altitud_msnm NUMERIC(7, 2), 
+    
     velocidad_kmh NUMERIC(5, 2),
     nivel_bateria_porcentaje NUMERIC(5, 2) NOT NULL,
-    CONSTRAINT fk_mision
+    
+    CONSTRAINT fk_mision 
         FOREIGN KEY(id_mision) 
         REFERENCES misiones(id_mision)
-        ON DELETE CASCADE -- Si se borra la misión, se borra su telemetría
+        ON DELETE CASCADE
 );
 
 -- ----------------------------------------------------------------

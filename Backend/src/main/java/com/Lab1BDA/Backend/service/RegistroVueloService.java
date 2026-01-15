@@ -128,7 +128,7 @@ public class RegistroVueloService {
      */
     public List<RegistroVuelo> actualizarMonitoreo(List<RegistroVuelo> registros, long segundos) {
         List<RegistroVuelo> registrosActualizados = new ArrayList<>();
-        // Para cada mision en proceso se obtiene su re
+        // Para cada mision en proceso se obtiene su ultimo punto de telemetria
         for (RegistroVuelo registro : registros) {
             RegistroVuelo nuevoRegistro = registro;
             Mision mision = misionRepository.findById(registro.getIdMision())
