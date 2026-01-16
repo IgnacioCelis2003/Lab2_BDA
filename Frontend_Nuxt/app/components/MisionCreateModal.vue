@@ -96,15 +96,6 @@
           />
         </label>
 
-        <!-- Estado -->
-        <label>
-          Estado
-          <select v-model="form.estado" required :disabled="saving">
-            <option>Pendiente</option>
-            <option>Completada</option>
-          </select>
-        </label>
-
         <!-- Ruta -->
         <label>
           Ruta (selecciona 2 puntos en el mapa)
@@ -338,7 +329,7 @@ async function submit() {
     idDronAsignado: form.idDronAsignado,
     fechaInicioPlanificada: new Date(form.fechaInicioPlanificada).toISOString(),
     fechaFinPlanificada: new Date(form.fechaFinPlanificada).toISOString(),
-    estado: form.estado,
+    estado: 'Pendiente', // El estado ya no se puede editar manualmente
     rutaWKT: form.rutaWKT,
   };
 

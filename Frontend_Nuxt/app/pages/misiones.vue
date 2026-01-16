@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 
 // Interface para Misión
 interface Mision {
@@ -23,6 +23,22 @@ const {
   status,
   refresh,
 } = await useFetch<Mision[]>(`/api/misiones/all`);
+
+// Ordenar misiones por estado: Pendiente, En Progreso, Completadas, Fallidas
+const sortedMisiones = computed(() => {
+  if (!misiones.value) return [];
+  const estadoOrder: Record<string, number> = {
+    "Pendiente": 0,
+    "En Progreso": 1,
+    "Completada": 2,
+    "Fallida": 3,
+  };
+  return [...misiones.value].sort((a, b) => {
+    const orderA = estadoOrder[a.estado] ?? 999;
+    const orderB = estadoOrder[b.estado] ?? 999;
+    return orderA - orderB;
+  });
+});
 
 // Modal crear
 const showModal = ref(false);
@@ -146,7 +162,7 @@ async function iniciarMision(m: Mision) {
     </article>
 
     <section v-else class="misiones-grid">
-      <article v-for="m in misiones" :key="m.idMision" class="card">
+      <article v-for="m in sortedMisiones" :key="m.idMision" class="card">
         <h3>Misión #{{ m.idMision }}</h3>
 
         <p><strong>Tipo de Misión:</strong> ID {{ m.idTipoMision }}</p>

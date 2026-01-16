@@ -33,10 +33,14 @@ Icon.Default.mergeOptions({
 onMounted(() => {
   if (!mapRef.value) return;
 
-  const initialLat = typeof props.lat === 'number' ? props.lat : 0;
-  const initialLon = typeof props.lon === 'number' ? props.lon : 0;
+  // Estación Central, Santiago de Chile
+  const defaultLat = -33.4372;
+  const defaultLon = -70.6700;
 
-  map = L.map(mapRef.value, { zoomControl: true }).setView([initialLat, initialLon], (initialLat || initialLon) ? 12 : 2);
+  const initialLat = typeof props.lat === 'number' ? props.lat : defaultLat;
+  const initialLon = typeof props.lon === 'number' ? props.lon : defaultLon;
+
+  map = L.map(mapRef.value, { zoomControl: true }).setView([initialLat, initialLon], 12);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
