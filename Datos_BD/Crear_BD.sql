@@ -99,6 +99,24 @@ CREATE TABLE IF NOT EXISTS registro_vuelo (
         ON DELETE CASCADE
 );
 
+-- Tabla de Puntos de Interés
+CREATE TABLE puntos_interes (
+    poi_id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100),
+    descripcion TEXT,
+    -- GEOMETRY(POINTZ, SRID). 4326 es WGS84 (Lat/Lon)
+    ubicacion GEOMETRY(POINTZ, 4326) NOT NULL
+);
+
+CREATE TABLE zonas_prohibidas (
+    zona_id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100),
+    -- Polígono 2D que define el área en el suelo
+    area GEOMETRY(POLYGON, 4326) NOT NULL
+);
+
+
+
 -- ----------------------------------------------------------------
 -- 4. CREACIÓN DE ÍNDICES
 -- ----------------------------------------------------------------
@@ -113,3 +131,6 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
 -- Índice ESPACIAL (GIST): Fundamental para búsquedas rápidas de coordenadas
 -- Esto es lo que permite que la consulta 9 sea eficiente 
 CREATE INDEX IF NOT EXISTS idx_registro_vuelo_coordenadas ON registro_vuelo USING GIST (coordenadas);
+
+CREATE INDEX IF NOT EXISTS idx_poi_geom ON puntos_interes USING GIST (ubicacion);
+CREATE INDEX IF NOT EXISTS idx_zonas_area ON zonas_prohibidas USING GIST (area);

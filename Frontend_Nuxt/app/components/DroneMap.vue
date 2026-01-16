@@ -98,8 +98,9 @@ onMounted(async () => {
 <style scoped>
 .map-container {
   position: relative;
-  height: 500px;
+  height: 600px;
   width: 100%;
+  max-width: 90%;
 }
 #map {
   height: 100%;
