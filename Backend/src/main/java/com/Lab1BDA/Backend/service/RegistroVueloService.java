@@ -197,6 +197,7 @@ public class RegistroVueloService {
         return registrosActualizados;
     }
 
+
 //    //Registro por id de dron
 //    public List<RegistroVuelo> getRegistroVuelo(long id) {
 //        //  obtener mision con id de dron

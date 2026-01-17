@@ -27,6 +27,9 @@ public class MisionService {
     private MisionRepository misionRepository;
 
     @Autowired
+    private PuntoInteresRepository puntoInteresRepository;
+
+    @Autowired
     private TipoMisionRepository tipoMisionRepository;
 
     @Autowired
@@ -441,5 +444,45 @@ public class MisionService {
         return tiempoViaje + calcularDuracionMision(m);
     }
 
+    /**
+     * Retorna la distancia 3D más cercana que alcanzó el dron al POI durante la misión.
+     * Entradas:
+     * misionId = id de la mision
+     * poiID = id del punto de interes
+     * Salida = distancia minima entre la ruta tomada por el dron y un punto de interes en especifico
+     */
+    public Double obtenerProximidadMinima3D(Long misionId, Long poiId) {
+        // 1. Validaciones previas
+        if (misionId == null || poiId == null) {
+            throw new IllegalArgumentException("Los IDs de misión y POI son requeridos.");
+        }
+
+        // 2. Llamada al repositorio
+        Double distancia = puntoInteresRepository.calcularDistanciaMinima3D(misionId, poiId);
+
+        if (distancia == null) {
+            // Esto podría pasar si la misión no tiene registros de vuelo aún
+            return -1.0;
+        }
+
+        return distancia;
+    }
+
+    /**
+     * Obtiene la distancia total recorrida por el dron en una misión (en metros).
+     * Requisito: Longitud Real de Vuelo (ST_MakeLine + ST_Length).
+     */
+    public Double obtenerLongitudRealVuelo(Long misionId) {
+        // Validamos que la misión exista (opcional, según tu lógica de excepciones)
+
+        Double longitudMetros = registroVueloRepository.calcularLongitudTrayectoria(misionId);
+
+        if (longitudMetros == null) {
+            return 0.0;
+        }
+
+        // Retornamos el valor redondeado a 2 decimales
+        return Math.round(longitudMetros * 100.0) / 100.0;
+    }
 
 }

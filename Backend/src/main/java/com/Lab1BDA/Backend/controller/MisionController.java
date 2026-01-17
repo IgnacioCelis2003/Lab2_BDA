@@ -184,4 +184,12 @@ public class MisionController {
         misionService.completarMision(idMision);
         return ResponseEntity.ok("Misión completada y vista materializada actualizada.");
     }
+
+
+    // En el Controlador
+    @GetMapping("/{id}/estadisticas/distancia-recorrida")
+    public ResponseEntity<MisionEstadisticaDTO> getDistanciaRecorrida(@PathVariable Long id) {
+        Double distancia = misionService.obtenerLongitudRealVuelo(id);
+        return ResponseEntity.ok(new MisionEstadisticaDTO(id, distancia, "metros"));
+    }
 }

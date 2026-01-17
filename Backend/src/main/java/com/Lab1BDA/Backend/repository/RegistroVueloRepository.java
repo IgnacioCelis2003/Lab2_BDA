@@ -103,5 +103,22 @@ public class RegistroVueloRepository {
                 "ORDER BY rv.id_mision, rv.\"timestamp\" DESC";
         return jdbcTemplate.query(sql, new RegistroVueloRowMapper());
     }
+    public Double calcularLongitudTrayectoria(Long misionId) {
+        // Usamos el campo de tiempo para asegurar la cronología real
+        // Reemplaza 'fecha' por el nombre exacto de tu columna de tiempo
+        String sql = """
+        SELECT ST_Length(
+            ST_MakeLine(coordenadas ORDER BY timestamp ASC)::geography
+        )
+        FROM registro_vuelo
+        WHERE id_mision = ?
+        """;
+
+        try {
+            return jdbcTemplate.queryForObject(sql, Double.class, misionId);
+        } catch (Exception e) {
+            return 0.0;
+        }
+    }
 
 }
