@@ -78,13 +78,15 @@ public class SecurityConfig {
                         .requestMatchers("/", "/error").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
 
+                        /*
+                        // Público (desarrollo)
                         .requestMatchers("/api/modelos/**").permitAll()
                         .requestMatchers("/api/drones/**").permitAll()
                         .requestMatchers("/api/misiones/**").permitAll()
                         .requestMatchers("/api/tipos-mision/**").permitAll()
                         .requestMatchers("/api/puntos-interes/**").permitAll()
 
-
+                         */
 
                         // Todo lo demás requiere JWT
                         .anyRequest().authenticated()
