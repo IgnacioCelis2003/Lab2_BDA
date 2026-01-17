@@ -192,4 +192,14 @@ public class MisionController {
         Double distancia = misionService.obtenerLongitudRealVuelo(id);
         return ResponseEntity.ok(new MisionEstadisticaDTO(id, distancia, "metros"));
     }
+    @GetMapping("/{idMision}/proximidad-poi/{idPoi}")
+    public ResponseEntity<ProximidadDTO> obtenerProximidad3D(
+            @PathVariable Long idMision,
+            @PathVariable Long idPoi) {
+
+        Double distancia = misionService.obtenerProximidadMinima3D(idMision, idPoi);
+
+        // Devolvemos el objeto record directamente
+        return ResponseEntity.ok(new ProximidadDTO(idMision, idPoi, distancia));
+    }
 }

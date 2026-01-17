@@ -98,19 +98,21 @@ public class PuntoInteresRepository {
      * y un punto de interés.
      */
     public Double calcularDistanciaMinima3D(Long misionId, Long poiId) {
-        // Usamos ::geography para forzar el cálculo en metros.
         String sql = """
-        SELECT MIN(ST_3DDistance(rv.coordenadas::geography, poi.ubicacion::geography))
+        SELECT MIN(ST_3DDistance(
+            ST_Transform(rv.coordenadas::geometry, 3857), 
+            ST_Transform(poi.ubicacion::geometry, 3857)
+        ))
         FROM registro_vuelo rv
-        JOIN puntos_interes poi ON poi.poi_id = ?
-        WHERE rv.id_mision = ?
+        CROSS JOIN puntos_interes poi
+        WHERE rv.id_mision = ? AND poi.poi_id = ?
         """;
 
         try {
-            return jdbcTemplate.queryForObject(sql, Double.class, poiId, misionId);
+            return jdbcTemplate.queryForObject(sql, Double.class, misionId, poiId);
         } catch (Exception e) {
-            // Si no hay registros de vuelo, devolvemos null o 0.0
-            return null;
+            // Loggear el error e para debuguear si sigue fallando
+            return -1.0;
         }
     }
 

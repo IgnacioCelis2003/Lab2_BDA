@@ -104,18 +104,22 @@ public class RegistroVueloRepository {
         return jdbcTemplate.query(sql, new RegistroVueloRowMapper());
     }
     public Double calcularLongitudTrayectoria(Long misionId) {
-        // Usamos el campo de tiempo para asegurar la cronología real
-        // Reemplaza 'fecha' por el nombre exacto de tu columna de tiempo
+        // Usamos ST_Transform para que la longitud se calcule en metros
+        // y ST_MakeLine para unir los puntos cronológicamente
         String sql = """
         SELECT ST_Length(
-            ST_MakeLine(coordenadas ORDER BY timestamp ASC)::geography
+            ST_Transform(
+                ST_MakeLine(coordenadas::geometry ORDER BY "timestamp" ASC), 
+                3857
+            )
         )
         FROM registro_vuelo
         WHERE id_mision = ?
         """;
 
         try {
-            return jdbcTemplate.queryForObject(sql, Double.class, misionId);
+            Double res = jdbcTemplate.queryForObject(sql, Double.class, misionId);
+            return (res != null) ? res : 0.0;
         } catch (Exception e) {
             return 0.0;
         }
