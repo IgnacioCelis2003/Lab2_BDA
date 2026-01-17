@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS misiones (
     fecha_fin_real TIMESTAMP,
     estado estado_mision NOT NULL DEFAULT 'Pendiente',
     
-    LINESTRINGZ (La Z indica 3D)
+    -- LINESTRINGZ (La Z indica 3D)
     ruta GEOGRAPHY(LINESTRINGZ, 4326), 
     
     -- Indice para rastrear el progreso en la ruta
