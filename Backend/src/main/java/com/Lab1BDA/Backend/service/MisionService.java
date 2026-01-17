@@ -473,7 +473,6 @@ public class MisionService {
      * Requisito: Longitud Real de Vuelo (ST_MakeLine + ST_Length).
      */
     public Double obtenerLongitudRealVuelo(Long misionId) {
-        // Validamos que la misión exista (opcional, según tu lógica de excepciones)
 
         Double longitudMetros = registroVueloRepository.calcularLongitudTrayectoria(misionId);
 
