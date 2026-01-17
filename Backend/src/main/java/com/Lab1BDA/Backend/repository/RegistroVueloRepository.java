@@ -27,43 +27,43 @@ public class RegistroVueloRepository {
             "ST_AsText(coordenadas) AS coordenadas_wkt " +
             "FROM registro_vuelo";
 
+    // WKBWriter para convertir geometrías al guardar. '3' indica 3 dimensiones (X, Y, Z). 'true' incluye el SRID.
+    private final WKBWriter wkbWriter = new WKBWriter(3, true);
+
     /**
      * Guarda un nuevo registro de telemetría en la base de datos.
      * @param registro El objeto RegistroVuelo a guardar.
      * @return El objeto RegistroVuelo guardado (con su ID).
      */
     public RegistroVuelo save(RegistroVuelo registro) {
-        // Consulta para ESCRIBIR (usando ST_GeogFromWKB como en MisionRepository)
+        // La consulta SQL usa ST_GeogFromWKB para interpretar los bytes que enviamos
         String sql = "INSERT INTO registro_vuelo (id_mision, \"timestamp\", coordenadas, " +
                 "altitud_msnm, velocidad_kmh, nivel_bateria_porcentaje) " +
                 "VALUES (?, ?, ST_GeogFromWKB(?), ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
-        WKBWriter wkbWriter = new WKBWriter(); // Para convertir Point a byte[]
 
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             ps.setLong(1, registro.getIdMision());
-            ps.setObject(2, registro.getTimestamp()); // setObject maneja LocalDateTime
+            ps.setObject(2, registro.getTimestamp());
 
-            // Convertimos el Point de JTS a WKB (byte[])
+            // Convertimos el objeto Point (que ya debe tener Z) a bytes
             if (registro.getCoordenadas() != null) {
                 ps.setBytes(3, wkbWriter.write(registro.getCoordenadas()));
             } else {
                 ps.setNull(3, Types.BINARY);
             }
 
-            ps.setObject(4, registro.getAltitudMsnm()); // setObject maneja Double null
+            ps.setObject(4, registro.getAltitudMsnm());
             ps.setObject(5, registro.getVelocidadKmh());
             ps.setDouble(6, registro.getNivelBateriaPorcentaje());
             return ps;
         }, keyHolder);
 
-        // Obtenemos el ID generado
         if (keyHolder.getKeys() != null && keyHolder.getKeys().containsKey("id_registro_vuelo")) {
             registro.setIdRegistroVuelo(((Number) keyHolder.getKeys().get("id_registro_vuelo")).longValue());
         }
-
         return registro;
     }
 

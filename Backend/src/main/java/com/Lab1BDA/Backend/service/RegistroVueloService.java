@@ -51,20 +51,32 @@ public class RegistroVueloService {
         registro.setAltitudMsnm(dto.altitudMsnm());
         registro.setVelocidadKmh(dto.velocidadKmh());
         registro.setNivelBateriaPorcentaje(dto.nivelBateriaPorcentaje());
-
-        // Si el DTO no trae timestamp, usamos el actual
         registro.setTimestamp(dto.timestamp() != null ? dto.timestamp() : LocalDateTime.now());
 
-        // Convertir el String WKT (ej: "POINT(1 2)") en un objeto Point
         try {
+            // 1. Leemos el WKT (Ej: "POINT(-70.6 33.4)") que suele ser 2D
             Geometry geom = wktReader.read(dto.coordenadasWKT());
+
             if (geom instanceof Point) {
-                registro.setCoordenadas((Point) geom);
+                Point p2d = (Point) geom;
+
+                // 2. CREAMOS EL PUNTO 3D REAL
+                // Obtenemos Z del DTO, o asumimos 0.0 si es nulo
+                double z = dto.altitudMsnm() != null ? dto.altitudMsnm() : 0.0;
+
+                // Coordinate soporta (x, y, z)
+                Coordinate coord3d = new Coordinate(p2d.getX(), p2d.getY(), z);
+
+                GeometryFactory factory = new GeometryFactory();
+                Point p3d = factory.createPoint(coord3d);
+                p3d.setSRID(4326); // Importante para PostGIS
+
+                registro.setCoordenadas(p3d);
             } else {
-                throw new IllegalArgumentException("El WKT proporcionado no es un POINT");
+                throw new IllegalArgumentException("El WKT no es un POINT");
             }
         } catch (ParseException e) {
-            throw new IllegalArgumentException("Formato WKT de coordenadas inválido", e);
+            throw new IllegalArgumentException("Error al leer coordenadas", e);
         }
 
         return registroVueloRepository.save(registro);

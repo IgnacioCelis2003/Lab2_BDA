@@ -4,7 +4,9 @@ import com.Lab1BDA.Backend.dto.*;
 import com.Lab1BDA.Backend.exception.ResourceNotFoundException;
 import com.Lab1BDA.Backend.model.*;
 import com.Lab1BDA.Backend.repository.*;
+import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry; // Importación necesaria
+import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
@@ -41,6 +43,8 @@ public class MisionService {
     private RegistroVueloRepository registroVueloRepository;
     @Autowired
     private ResumenMisionesService resumenMisionesService;
+    @Autowired
+    private ZonaProhibidaService zonaProhibidaService;
 
     public List<Mision> getTodasLasMisiones() {
         return misionRepository.findAll();
@@ -69,6 +73,14 @@ public class MisionService {
         // 3. Convertir WKT (String) a LineString (JTS)
         mision.setRuta(convertWKTToLineString(dto.rutaWKT()));
 
+        if (dto.rutaWKT() != null) {
+            List<String> zonasInfringidas = zonaProhibidaService.verificarInfraccion(dto.rutaWKT());
+            if (!zonasInfringidas.isEmpty()) {
+                throw new IllegalArgumentException("La ruta planificada atraviesa las siguientes zonas prohibidas: "
+                        + String.join(", ", zonasInfringidas));
+            }
+        }
+
         // 4. Pasa la Mision (con el LineString) al repositorio
         return misionRepository.save(mision);
     }
@@ -86,6 +98,14 @@ public class MisionService {
 
         // 3. Convertir WKT (String) a LineString (JTS)
         misionExistente.setRuta(convertWKTToLineString(dto.rutaWKT()));
+
+        if (dto.rutaWKT() != null) {
+            List<String> zonasInfringidas = zonaProhibidaService.verificarInfraccion(dto.rutaWKT());
+            if (!zonasInfringidas.isEmpty()) {
+                throw new IllegalArgumentException("La ruta actualizada atraviesa las siguientes zonas prohibidas: "
+                        + String.join(", ", zonasInfringidas));
+            }
+        }
 
         // 4. Pasa la Mision (con el LineString) al repositorio
         return misionRepository.update(misionExistente);
@@ -155,12 +175,36 @@ public class MisionService {
         try {
             Geometry geom = wktReader.read(wkt);
             if (geom instanceof LineString) {
-                return (LineString) geom;
+                LineString ruta = (LineString) geom;
+
+                // Validar si tiene coordenada Z
+                Coordinate[] coords = ruta.getCoordinates();
+                boolean cambioNecesario = false;
+
+                // Altura por defecto para la ruta planificada (ej: 50 metros)
+                double alturaDefecto = 50.0;
+
+                for (Coordinate c : coords) {
+                    if (Double.isNaN(c.getZ())) {
+                        c.setZ(alturaDefecto);
+                        cambioNecesario = true;
+                    }
+                }
+
+                // Si venía en 2D, recreamos la geometría en 3D
+                if (cambioNecesario) {
+                    GeometryFactory factory = new GeometryFactory();
+                    LineString ruta3D = factory.createLineString(coords);
+                    ruta3D.setSRID(4326);
+                    return ruta3D;
+                }
+
+                ruta.setSRID(4326);
+                return ruta;
             }
-            throw new IllegalArgumentException("El WKT proporcionado no es un LINESTRING");
+            throw new IllegalArgumentException("El WKT no es un LINESTRING");
         } catch (ParseException e) {
-            // Esto debería devolver un 400 Bad Request
-            throw new IllegalArgumentException("Formato WKT de la ruta es inválido: " + wkt, e);
+            throw new IllegalArgumentException("Error WKT ruta", e);
         }
     }
 
@@ -174,7 +218,7 @@ public class MisionService {
     public void asignarMisionADron(Long idMision, Long idDron) {
         // La lógica de validación (si el dron está 'Disponible', etc.)
         // ya está encapsulada dentro del Procedimiento Almacenado,
-        // cumpliendo el requisito del enunciado[cite: 60].
+        // cumpliendo el requisito del enunciado
 
         // Simplemente llamamos al repositorio.
         misionRepository.asignarMisionADron(idMision, idDron);
@@ -396,5 +440,6 @@ public class MisionService {
         double tiempoViaje = distancia / velocidadMetrosMin;
         return tiempoViaje + calcularDuracionMision(m);
     }
+
 
 }

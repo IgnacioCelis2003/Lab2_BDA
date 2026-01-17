@@ -29,6 +29,9 @@ public class MisionRepository {
             "id_operador_creador, fecha_creacion, fecha_inicio_planificada, fecha_fin_planificada, " +
             "fecha_inicio_real, fecha_fin_real, estado, ST_AsText(ruta::geometry) AS ruta_wkt FROM misiones";
 
+    // Dimensión 3 para soportar rutas con altura
+    private final WKBWriter wkbWriter = new WKBWriter(3, true);
+
     public List<Mision> findAll() {
         return jdbcTemplate.query(BASE_SELECT, new MisionRowMapper());
     }
@@ -46,9 +49,6 @@ public class MisionRepository {
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
-
-        // Creamos un WKBWriter para convertir el objeto JTS a bytes
-        WKBWriter wkbWriter = new WKBWriter();
 
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -84,7 +84,7 @@ public class MisionRepository {
 
         // Convertimos el LineString a byte[] antes de pasarlo al update
         byte[] rutaWkb = (mision.getRuta() != null)
-                ? new WKBWriter().write(mision.getRuta())
+                ? wkbWriter.write(mision.getRuta())
                 : null;
 
         jdbcTemplate.update(sql,
