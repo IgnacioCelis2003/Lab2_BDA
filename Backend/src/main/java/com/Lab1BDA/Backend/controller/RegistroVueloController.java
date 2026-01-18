@@ -2,6 +2,7 @@ package com.Lab1BDA.Backend.controller;
 
 import com.Lab1BDA.Backend.dto.RegistroVueloRequestDTO;
 import com.Lab1BDA.Backend.dto.UbicacionDTO;
+import com.Lab1BDA.Backend.dto.VelocidadCalculadaDTO;
 import com.Lab1BDA.Backend.model.RegistroVuelo;
 import com.Lab1BDA.Backend.service.RegistroVueloService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,5 +52,18 @@ public class RegistroVueloController {
     public ResponseEntity<List<UbicacionDTO>> getMonitoreo() {
         List<UbicacionDTO> ubicaciones = registroVueloService.getMonitoreo();
         return ResponseEntity.ok(ubicaciones);
+    }
+
+    @GetMapping("/velocidad/{idMision}")
+    public ResponseEntity<List<VelocidadCalculadaDTO>> obtenerVelocidadMision(@PathVariable Long idMision) {
+
+        // AQUI LLAMAMOS AL METODO CORREGIDO DEL SERVICIO
+        List<VelocidadCalculadaDTO> resultado = registroVueloService.obtenerVelocidades(idMision);
+
+        if (resultado.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        return ResponseEntity.ok(resultado);
     }
 }

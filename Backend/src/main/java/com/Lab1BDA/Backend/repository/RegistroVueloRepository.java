@@ -1,5 +1,6 @@
 package com.Lab1BDA.Backend.repository;
 
+import com.Lab1BDA.Backend.dto.VelocidadCalculadaDTO;
 import com.Lab1BDA.Backend.model.RegistroVuelo;
 import com.Lab1BDA.Backend.repository.mappers.RegistroVueloRowMapper;
 import org.locationtech.jts.io.WKBWriter;
@@ -8,6 +9,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.jdbc.core.RowMapper;
+
+
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
@@ -125,4 +129,52 @@ public class RegistroVueloRepository {
         }
     }
 
+
+    public List<VelocidadCalculadaDTO> obtenerVelocidadesCalculadas(Long idMision) {
+        // SQL NATIVO POSTGRESQL (PostGIS)
+        String sql = """
+            SELECT 
+                timestamp,
+                
+                -- 1. Distancia en metros respecto al punto anterior
+                CAST(ST_Distance(
+                    coordenadas::geography, 
+                    LAG(coordenadas) OVER (ORDER BY timestamp)::geography
+                ) AS double precision) AS dist_metros,
+
+                -- 2. Diferencia de tiempo en segundos
+                CAST(EXTRACT(EPOCH FROM (
+                    timestamp - LAG(timestamp) OVER (ORDER BY timestamp)
+                )) AS double precision) AS delta_seg,
+
+                -- 3. Cálculo de Velocidad: (Distancia / Tiempo) * 3.6 = Km/h
+                CAST(
+                    (ST_Distance(
+                        coordenadas::geography, 
+                        LAG(coordenadas) OVER (ORDER BY timestamp)::geography
+                    ) 
+                    / 
+                    NULLIF(EXTRACT(EPOCH FROM (
+                        timestamp - LAG(timestamp) OVER (ORDER BY timestamp)
+                    )), 0) -- Evitar división por cero
+                    ) * 3.6 
+                AS double precision) AS velocidad_calc_kmh
+
+            FROM registro_vuelo
+            WHERE id_mision = ?
+            ORDER BY timestamp ASC
+        """;
+
+        // MAPEO MANUAL (ResultSet -> Java Record)
+        RowMapper<VelocidadCalculadaDTO> mapper = (rs, rowNum) -> new VelocidadCalculadaDTO(
+                rs.getTimestamp("timestamp").toLocalDateTime(),
+                rs.getObject("dist_metros", Double.class),      // Puede ser null en la 1ra fila
+                rs.getObject("delta_seg", Double.class),        // Puede ser null
+                rs.getObject("velocidad_calc_kmh", Double.class) // Puede ser null
+        );
+
+        // Ejecutar query pasando el ID de la misión
+        return jdbcTemplate.query(sql, mapper, idMision);
+    }
 }
+

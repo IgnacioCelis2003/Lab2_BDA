@@ -2,6 +2,7 @@ package com.Lab1BDA.Backend.service;
 
 import com.Lab1BDA.Backend.dto.RegistroVueloRequestDTO;
 import com.Lab1BDA.Backend.dto.UbicacionDTO;
+import com.Lab1BDA.Backend.dto.VelocidadCalculadaDTO;
 import com.Lab1BDA.Backend.model.Dron;
 import com.Lab1BDA.Backend.model.Mision;
 import com.Lab1BDA.Backend.model.ModeloDron;
@@ -195,6 +196,14 @@ public class RegistroVueloService {
             registrosActualizados.add(nuevoRegistro);
         }
         return registrosActualizados;
+    }
+
+    public List<VelocidadCalculadaDTO> obtenerVelocidades(Long idMision) {
+        // 1. Llamamos al repositorio que ya funciona
+        List<VelocidadCalculadaDTO> reporte = registroVueloRepository.obtenerVelocidadesCalculadas(idMision);
+
+        // 2. RETORNAMOS la lista al controlador (esto es lo que faltaba)
+        return reporte;
     }
 
 
