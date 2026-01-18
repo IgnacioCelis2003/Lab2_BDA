@@ -5,6 +5,7 @@ import com.Lab1BDA.Backend.model.Mision;
 import com.Lab1BDA.Backend.repository.mappers.*;
 // YA NO NECESITAMOS 'org.postgis.PGgeometry'
 // IMPORTAMOS EL ESCRITOR DE WKB
+import org.locationtech.jts.io.WKBReader;
 import org.locationtech.jts.io.WKBWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,7 +28,7 @@ public class MisionRepository {
 
     private final String BASE_SELECT = "SELECT id_mision, id_dron_asignado, id_tipo_mision, " +
             "id_operador_creador, fecha_creacion, fecha_inicio_planificada, fecha_fin_planificada, " +
-            "fecha_inicio_real, fecha_fin_real, estado, ST_AsText(ruta::geometry) AS ruta_wkt FROM misiones";
+            "fecha_inicio_real, fecha_fin_real, estado, ST_AsBinary(ruta) AS ruta_bytes FROM misiones";
 
     // Dimensión 3 para soportar rutas con altura
     private final WKBWriter wkbWriter = new WKBWriter(3, true);

@@ -24,14 +24,7 @@ public class Mision {
     private LocalDateTime fechaInicioReal;
     private LocalDateTime fechaFinReal;
     private String estado; // El ENUM 'estado_mision'
-    @JsonIgnore // Evita la serialización recursiva que causa el "envelope" infinito
+
     private LineString ruta; // PostGIS LineString se mapea a JTS LineString
 
-    // Exponer la ruta como WKT (string) en el JSON de salida para evitar problemas
-    // de serialización con la librería JTS.
-    @JsonProperty("rutaWKT")
-    public String getRutaWKT() {
-        if (this.ruta == null) return null;
-        return new WKTWriter().write(this.ruta);
-    }
 }

@@ -3,6 +3,7 @@ package com.Lab1BDA.Backend.config;
 import com.Lab1BDA.Backend.security.JwtRequestFilter;
 import com.Lab1BDA.Backend.service.UserDetailsServiceImpl;
 import jakarta.servlet.http.HttpServletResponse;
+import org.n52.jackson.datatype.jts.JtsModule;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -85,8 +86,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/misiones/**").permitAll()
                         .requestMatchers("/api/tipos-mision/**").permitAll()
                         .requestMatchers("/api/puntos-interes/**").permitAll()
-
                          */
+
+
 
                         // Todo lo demás requiere JWT
                         .anyRequest().authenticated()
@@ -99,5 +101,10 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    @Bean
+    public JtsModule jtsModule() {
+        return new JtsModule();
     }
 }

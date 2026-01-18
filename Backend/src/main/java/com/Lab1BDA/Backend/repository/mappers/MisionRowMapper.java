@@ -5,6 +5,7 @@ import com.Lab1BDA.Backend.model.Mision;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.io.ParseException;
+import org.locationtech.jts.io.WKBReader;
 import org.locationtech.jts.io.WKTReader;
 // Ya no necesitamos org.postgis.PGgeometry aquí
 import org.springframework.jdbc.core.RowMapper;
@@ -16,12 +17,13 @@ import java.time.LocalDateTime;
 public class MisionRowMapper implements RowMapper<Mision> {
 
     // Creamos un WKTReader para parsear el String que viene de la BD
-    private final WKTReader wktReader = new WKTReader();
+    private final WKBReader wkbReader = new WKBReader();
 
     @Override
     public Mision mapRow(ResultSet rs, int rowNum) throws SQLException {
         Mision mision = new Mision();
         mision.setIdMision(rs.getLong("id_mision"));
+
         Object idDron = rs.getObject("id_dron_asignado");
         if (idDron != null) {
             mision.setIdDronAsignado(((Number) idDron).longValue());
@@ -39,20 +41,20 @@ public class MisionRowMapper implements RowMapper<Mision> {
 
         // --- Mapeo Corregido de GEOGRAPHY ---
         // 1. Leemos el String WKT de la columna 'ruta_wkt'
-        String rutaWkt = rs.getString("ruta_wkt");
+        byte[] rutaBytes = rs.getBytes("ruta_bytes");
 
-        if (rutaWkt != null && !rutaWkt.isEmpty()) {
+        if (rutaBytes != null && rutaBytes.length > 0) {
             try {
-                // 2. Usamos el WKTReader para convertir el String a un objeto Geometry de JTS
-                Geometry geom = wktReader.read(rutaWkt);
-
-                // 3. Verificamos que sea un LineString (como esperamos) y lo asignamos
+                Geometry geom = wkbReader.read(rutaBytes);
                 if (geom instanceof LineString) {
                     mision.setRuta((LineString) geom);
+                    // Opcional: Asegurar SRID 4326 si JTS no lo infiere
+                    if (mision.getRuta().getSRID() == 0) {
+                        mision.getRuta().setSRID(4326);
+                    }
                 }
             } catch (ParseException e) {
-                // Si el WKT está malformado, lanzamos una excepción
-                throw new SQLException("Error al parsear WKT de la ruta para la misión id: " + mision.getIdMision(), e);
+                throw new SQLException("Error al parsear geometría WKB", e);
             }
         }
 

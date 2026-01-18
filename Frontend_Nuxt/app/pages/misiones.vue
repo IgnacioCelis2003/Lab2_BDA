@@ -1,6 +1,12 @@
 <script lang="ts" setup>
 import { ref, computed } from "vue";
 
+// Define la estructura interna de la geometría
+interface GeoJSON {
+  type: string;
+  coordinates: number[][]; // Array de arrays (ej: [[x,y,z], [x,y,z]])
+}
+
 // Interface para Misión
 interface Mision {
   idMision: number;
@@ -13,7 +19,7 @@ interface Mision {
   fechaInicioReal: string | null;
   fechaFinReal: string | null;
   estado: string;
-  rutaWKT: string;
+  ruta: GeoJSON | null;
 }
 
 // Obtener todas las misiones registradas (backend: GET /api/misiones)
@@ -121,6 +127,15 @@ async function iniciarMision(m: Mision) {
     startingId.value = null;
   }
 }
+
+// Función auxiliar para mostrar las coordenadas como texto
+function formatearRuta(ruta: GeoJSON | null): string {
+  if (!ruta || !Array.isArray(ruta.coordinates)) return "Sin ruta asignada";
+
+  return ruta.coordinates
+    .map(coord => `[${coord[0].toFixed(4)}, ${coord[1].toFixed(4)}, ${coord[2]}m]`)
+    .join(" ➝ ");
+}
 </script>
 
 <template>
@@ -216,10 +231,10 @@ async function iniciarMision(m: Mision) {
         <hr style="margin: 0.5rem 0" />
 
         <p>
-          <strong>Ruta WKT:</strong>
-          <code style="font-size: 0.85rem; word-break: break-word">{{
-            m.rutaWKT
-          }}</code>
+          <strong>Ruta (Coords):</strong>
+          <code style="font-size: 0.75rem; word-break: break-word">
+            {{ formatearRuta(m.ruta) }}
+          </code>
         </p>
 
         <p>

@@ -12,8 +12,7 @@ import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.Coordinate;
+
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -361,7 +360,7 @@ public class MisionService {
                 String nombreTipo = tipoMisionRepository.findById(candidata.getIdTipoMision())
                         .map(t -> t.getNombreTipo()).orElse("Misión");
 
-                pasos.add(new MisionOrdenadaDTO(pasos.size() + 1, candidata.getIdMision(), nombreTipo, candidata.getRutaWKT()));
+                pasos.add(new MisionOrdenadaDTO(pasos.size() + 1, candidata.getIdMision(), nombreTipo, candidata.getRuta()));
             } else {
                 puedeSeguir = false;
             }
@@ -416,7 +415,7 @@ public class MisionService {
         return matriz.stream()
                 .filter(d -> (d.idOrigen().equals(origen) && d.idDestino().equals(destino)) ||
                         (d.idOrigen().equals(destino) && d.idDestino().equals(origen)))
-                .mapToDouble(DistanciaMisionDTO::distanciaMetro)
+                .mapToDouble(DistanciaMisionDTO::distanciaMetros)
                 .findFirst().orElse(100000.0);
     }
 

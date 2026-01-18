@@ -6,5 +6,5 @@ package com.Lab1BDA.Backend.dto;
 public record DistanciaMisionDTO(
         Long idOrigen,
         Long idDestino,
-        Double distanciaMetro
+        Double distanciaMetros
 ){}
