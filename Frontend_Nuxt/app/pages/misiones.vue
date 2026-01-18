@@ -230,12 +230,29 @@ function formatearRuta(ruta: GeoJSON | null): string {
 
         <hr style="margin: 0.5rem 0" />
 
-        <p>
-          <strong>Ruta (Coords):</strong>
-          <code style="font-size: 0.75rem; word-break: break-word">
-            {{ formatearRuta(m.ruta) }}
-          </code>
-        </p>
+        <p><strong>Detalle de Ruta (Puntos):</strong></p>
+
+        <ul class="ruta-list">
+          <li v-for="(coord, index) in m.ruta?.coordinates" :key="index">
+            
+            <span class="punto-badge">
+                {{ index === 0 ? '🚩 Inicio' : index === m.ruta.coordinates.length - 1 ? '🏁 Fin' : `#${index}` }}
+            </span>
+
+            <div class="coords-detail">
+                <span title="Latitud">
+                    <b>Lat:</b> {{ coord[1].toFixed(5) }}
+                </span>
+                <span title="Longitud">
+                    <b>Lon:</b> {{ coord[0].toFixed(5) }}
+                </span>
+                <span title="Altitud" class="alt-badge">
+                    <b>Alt:</b> {{ coord[2] }}m
+                </span>
+            </div>
+            
+          </li>
+        </ul>
 
         <p>
           <strong>Creada:</strong>
@@ -339,5 +356,76 @@ function formatearRuta(ruta: GeoJSON | null): string {
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-weight: 600;
+}
+
+/* Lista contenedora */
+.ruta-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  max-height: 150px;
+  overflow-y: auto;
+  
+  /* Fondo oscuro semitransparente */
+  background-color: rgba(0, 0, 0, 0.4); 
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+/* Elementos de la lista */
+.ruta-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
+  font-size: 0.8rem;
+}
+
+.ruta-list li:last-child {
+  border-bottom: none;
+}
+
+/* Título del punto (Inicio/Fin/#) */
+.punto-badge {
+  font-weight: bold;
+  color: #ffffff; /* Blanco puro */
+  margin-bottom: 0.2rem;
+  font-size: 0.9rem;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5); /* Sombra para resaltar */
+}
+
+/* Contenedor de las coordenadas */
+.coords-detail {
+  display: flex;
+  gap: 0.8rem;
+  color: #e2e8f0; /* Blanco humo (muy claro) para los números */
+  flex-wrap: wrap;
+}
+
+/* Las etiquetas "Lat:", "Lon:" */
+.coords-detail b {
+  color: #ffffff; /* Blanco puro para las etiquetas */
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+/* Resalte de la altura */
+.alt-badge {
+  color: #60a5fa; /* Azul brillante que se lee bien en negro */
+  font-weight: bold;
+}
+
+.ruta-list::-webkit-scrollbar {
+  width: 6px;
+}
+.ruta-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+.ruta-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+.ruta-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>
