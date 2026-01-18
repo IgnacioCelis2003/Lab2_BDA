@@ -30,14 +30,15 @@ const props = defineProps({
 
 const { misionId, poiId } = toRefs(props);
 
-// --- CAMBIO CLAVE: NO USAR REF PARA EL MAPA ---
 // Vue Proxy rompe Leaflet. Usamos variables nativas de JS.
 let mapInstance = null;
 let L = null;
 let markers = {};
 let rutaLayer = null;
+let rutaVisualLayer = null; // Capa para la línea neón
+let rutaMarkers = []; // Array para guardar los pines de inicio/fin
 
-const pois = ref([]); // Los datos sí pueden ser reactivos
+const pois = ref([]);
 
 // --- PARSER WKT ---
 function parseWktToLatLng(wkt) {
@@ -61,7 +62,7 @@ function getIcon(tipo) {
 
   // Colores más modernos (Azul y Rojo vibrante)
   const color = isSelected ? "#dc2626" : "#2563eb";
-  // Tamaños más pequeños y discretos
+
   const size = isSelected ? 32 : 24;
 
   // SVG del pin de mapa (con un círculo blanco dentro y borde blanco para contraste)
@@ -112,13 +113,10 @@ async function fetchPois() {
 }
 
 // --- DIBUJAR RUTA ---
-// En components/Lab2/PtoInteresMap.vue
 
 async function dibujarRuta(id) {
-  // Si no hay mapa o librería cargada, abortamos para no causar errores
   if (!id || !mapInstance || !L) return;
-
-  // Limpiar ruta anterior si existe
+  // Limpiar ruta vieja
   if (rutaLayer) {
     mapInstance.removeLayer(rutaLayer);
     rutaLayer = null;
@@ -127,7 +125,7 @@ async function dibujarRuta(id) {
   try {
     const data = await $fetch(`/api/telemetria/mision/${id}`);
 
-    // VALIDACIÓN 1: ¿Vino data?
+    // VALIDACIÓN 1: Vino data?
     if (!data || !Array.isArray(data) || data.length === 0) {
       console.log("La misión no tiene puntos de telemetría.");
       return;
@@ -159,6 +157,97 @@ async function dibujarRuta(id) {
     console.error("Error al dibujar ruta:", e);
   }
 }
+
+async function dibujarRutaVisual(idMision) {
+  if (!mapInstance || !L || !idMision) return;
+
+  // 1. Limpieza: Borrar línea y marcadores viejos si existen
+  if (rutaVisualLayer) {
+    mapInstance.removeLayer(rutaVisualLayer);
+    rutaVisualLayer = null;
+  }
+  rutaMarkers.forEach((m) => mapInstance.removeLayer(m));
+  rutaMarkers = [];
+
+  try {
+    // 2. Pedir los puntos al Proxy
+    const puntos = await $fetch(`/api/misiones/${idMision}/ruta`);
+
+    if (!puntos || puntos.length < 2) {
+      console.log("No hay suficientes puntos para trazar ruta.");
+      return;
+    }
+
+    // 3. Convertir a formato Leaflet [lat, lon]
+    const latlngs = puntos.map((p) => [p.latitud, p.longitud]);
+
+    // 4. ESTILO CIBERPUNK
+    // Una línea gruesa semi-transparente abajo (el "brillo")
+    // y una línea punteada sólida encima.
+
+    // Esto evita que Leaflet use un <div>, así que adiós al cuadrado azul.
+    const crearIconoSVG = (emoji) => {
+      // 1. Creamos un SVG minúsculo con el emoji dentro
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <text y="50%" x="50%" dominant-baseline="middle" text-anchor="middle" font-size="80">${emoji}</text>
+        </svg>`;
+
+      // 2. Lo codificamos para que el navegador lo entienda como archivo de imagen
+      const urlImagen =
+        "data:image/svg+xml;base64," +
+        btoa(unescape(encodeURIComponent(svgString)));
+
+      // 3. Usamos L.icon (IMAGEN) en vez de L.divIcon (CAJA HTML)
+      return L.icon({
+        iconUrl: urlImagen,
+        iconSize: [40, 40], // Tamaño de la imagen
+        iconAnchor: [20, 20], // Centro de la imagen
+        popupAnchor: [0, -20],
+      });
+    };
+
+    // --- Usamos la función para crear los iconos ---
+    const inicioIcon = crearIconoSVG("🛸");
+    const finIcon = crearIconoSVG("🏁");
+
+    // A. LÍNEA ROJO OSCURO (#8B0000) - La mantenemos igual
+    rutaVisualLayer = L.polyline(latlngs, {
+      color: "#8B0000",
+      weight: 5,
+      opacity: 0.9,
+      dashArray: "10, 10",
+      lineCap: "round",
+    }).addTo(mapInstance);
+
+    // Creamos los marcadores en el mapa usando estos nuevos iconos
+    const markerInicio = L.marker(latlngs[0], {
+      icon: inicioIcon,
+      zIndexOffset: 1000,
+    })
+      .addTo(mapInstance)
+      .bindPopup("<strong>🛸 Inicio de Misión</strong><br>Despegue.");
+
+    const markerFin = L.marker(latlngs[latlngs.length - 1], {
+      icon: finIcon,
+      zIndexOffset: 1000,
+    })
+      .addTo(mapInstance)
+      .bindPopup("<strong>🏁 Fin de Misión</strong><br>Aterrizaje.");
+
+    // Guardamos en el array para poder borrarlos luego
+    rutaMarkers.push(markerInicio, markerFin);
+
+    // Encuadrar el mapa para ver toda la ruta
+    mapInstance.fitBounds(rutaVisualLayer.getBounds(), { padding: [50, 50] });
+  } catch (e) {
+    console.error("Error dibujando ruta visual:", e);
+  }
+}
+
+defineExpose({
+  dibujarRutaVisual,
+});
 
 // --- WATCHERS ---
 watch(poiId, (newId) => {
@@ -195,7 +284,6 @@ onMounted(async () => {
       attribution: "© OpenStreetMap",
     }).addTo(mapInstance);
 
-    // TRUCO DE MAGIA: Invalidar tamaño para forzar repintado
     setTimeout(() => {
       mapInstance.invalidateSize();
     }, 200);
@@ -214,7 +302,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* FORZAR ALTURA ES CRÍTICO */
 .map-container {
   width: 100%;
   height: 600px; /* Altura fija en pixeles, no porcentajes */
@@ -323,5 +410,52 @@ onUnmounted(() => {
 /* Asegura que el seleccionado siempre se vea un poco más grande/resaltado */
 :deep(.leaflet-marker-selected svg) {
   z-index: 1000; /* Traer al frente */
+}
+
+/* Usamos :deep porque Leaflet crea estos elementos fuera del template de Vue */
+:deep(.leaflet-div-icon.marker-limpio) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important; /* A veces el cuadrado es una sombra */
+}
+
+/* Aseguramos que el contenido interno tampoco tenga fondo */
+:deep(.marker-limpio div) {
+  background: transparent !important;
+  border: none !important;
+}
+</style>
+
+<style>
+/* ESTILO GLOBAL: TARJETA BLANCA */
+
+.leaflet-div-icon.marker-tarjeta-blanca {
+  /* 1. Fondo Blanco y Bordes */
+  background-color: #ffffff !important; /* Blanco puro */
+  border: 2px solid #e2e8f0 !important; /* Borde gris muy suave */
+  border-radius: 8px !important; /* Bordes redondeados (estético) */
+
+  /* 2. Centrado Perfecto del Emoji */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  /* 3. Tamaño del Emoji */
+  font-size: 20px !important; /* Tamaño controlado, no gigante */
+
+  /* 4. Sombra para dar profundidad (Efecto flotante) */
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+
+  /* 5. Quitamos cosas raras por defecto */
+  outline: none !important;
+}
+
+/* Efecto opcional: al pasar el mouse se levanta un poco */
+/* (Solo funcionará si no hay otros estilos bloqueando hover) */
+.leaflet-div-icon.marker-tarjeta-blanca:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1 !important;
 }
 </style>

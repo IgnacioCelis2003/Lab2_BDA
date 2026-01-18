@@ -42,6 +42,8 @@ const loading = ref(false);
 const loadingProximidad = ref(false);
 const errorMsg = ref<string | null>(null);
 
+const mapaRef = ref<any>(null);
+
 // --- 1. CARGA DE DATOS INICIALES ---
 const cargarDatos = async () => {
   try {
@@ -119,7 +121,7 @@ async function calcularProximidad() {
     const metros = response.distanciaMinima3DMetros;
 
     if (typeof metros === "number") {
-      // Formateo inteligente: Metros si es cerca, KM si es lejos
+      // Metros si es cerca, KM si es lejos
       if (metros < 1000) {
         resultadoProximidad.value = `${metros.toFixed(2)} metros`;
       } else {
@@ -137,6 +139,17 @@ async function calcularProximidad() {
   }
 }
 
+async function verRutaEnMapa() {
+  if (!selectedMisionId.value) {
+    alert("Selecciona una misión primero.");
+    return;
+  }
+  // Llamamos a la función que creamos en el hijo
+  if (mapaRef.value) {
+    mapaRef.value.dibujarRutaVisual(selectedMisionId.value);
+  }
+}
+
 // Al montar el componente, cargamos los selects
 onMounted(() => {
   cargarDatos();
@@ -148,7 +161,8 @@ onMounted(() => {
     <header class="header">
       <h1>Análisis Espacial de Vuelos</h1>
       <p class="subtitle">
-        Calcula distancias reales y verifica cercanía a zonas de interés.
+        Calcula distancias reales, verifica cercanía a zonas de interés y
+        visualiza trayectorias.
       </p>
     </header>
 
@@ -212,10 +226,10 @@ onMounted(() => {
 
         <button
           @click="calcularProximidad"
-          :disabled="loading || !selectedMisionId || !selectedPoiId"
+          :disabled="loadingProximidad || !selectedMisionId || !selectedPoiId"
           class="btn btn-warning"
         >
-          {{ loading ? "Verificando..." : "Verificar Cercanía" }}
+          {{ loadingProximidad ? "Verificando..." : "Verificar Cercanía" }}
         </button>
 
         <div v-if="resultadoProximidad" class="result-box">
@@ -223,13 +237,32 @@ onMounted(() => {
           <span class="value">{{ resultadoProximidad }}</span>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-icon">🗺️</div>
+        <h3>Trayectoria de Vuelo</h3>
+        <p>Proyectar la telemetría real sobre el mapa (Estilo HUD).</p>
+
+        <button
+          class="btn btn-info"
+          @click="verRutaEnMapa"
+          :disabled="!selectedMisionId"
+          style="background-color: #0ea5e9; border: none; color: white"
+        >
+          👁️ Ver Ruta en Mapa
+        </button>
+      </div>
     </div>
 
     <div class="map-section">
       <h2>Visualización Geográfica</h2>
       <div class="map-wrapper">
         <ClientOnly fallback-tag="div" fallback="Cargando mapa...">
-          <PtoInteresMap :misionId="selectedMisionId" :poiId="selectedPoiId" />
+          <PtoInteresMap
+            ref="mapaRef"
+            :misionId="selectedMisionId"
+            :poiId="selectedPoiId"
+          />
         </ClientOnly>
       </div>
     </div>

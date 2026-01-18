@@ -202,4 +202,9 @@ public class MisionController {
         // Devolvemos el objeto record directamente
         return ResponseEntity.ok(new ProximidadDTO(idMision, idPoi, distancia));
     }
+
+    @GetMapping("/{id}/ruta-puntos")
+    public ResponseEntity<List<CoordenadaDTO>> getRutaVisual(@PathVariable Long id) {
+        return ResponseEntity.ok(misionService.obtenerRutaDeVuelo(id));
+    }
 }

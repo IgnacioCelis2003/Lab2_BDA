@@ -12,7 +12,8 @@ import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.Coordinate;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -482,6 +483,27 @@ public class MisionService {
 
         // Retornamos el valor redondeado a 2 decimales
         return Math.round(longitudMetros * 100.0) / 100.0;
+    }
+
+    public List<CoordenadaDTO> obtenerRutaDeVuelo(Long misionId) {
+        Mision mision = misionRepository.findById(misionId)
+                .orElseThrow(() -> new RuntimeException("Misión no encontrada"));
+
+        // Asumimos que el campo en tu entidad se llama 'ruta' o 'sentencia'
+        // y es de tipo Geometry o LineString
+        Geometry geom = mision.getRuta(); // O mision.getRuta(), revisa tu entidad
+
+        List<CoordenadaDTO> listaPuntos = new ArrayList<>();
+
+        if (geom != null) {
+            // Recorremos las coordenadas internas de la geometría
+            for (Coordinate coord : geom.getCoordinates()) {
+                // OJO: JTS suele guardar (X,Y) -> (Longitud, Latitud)
+                // Leaflet necesita (Latitud, Longitud). Invertimos aquí.
+                listaPuntos.add(new CoordenadaDTO(coord.y, coord.x));
+            }
+        }
+        return listaPuntos;
     }
 
 }
