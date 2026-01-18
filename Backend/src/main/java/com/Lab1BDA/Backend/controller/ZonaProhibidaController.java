@@ -36,16 +36,6 @@ public class ZonaProhibidaController {
         }
     }
 
-    // Endpoint para verificar si una ruta infringe zonas (útil para planificadores)
-    @PostMapping("/verificar-ruta")
-    public ResponseEntity<Map<String, Object>> verificarRuta(@RequestBody Map<String, String> body) {
-        List<String> zonas = zonaService.verificarInfraccion(body.get("rutaWkt"));
-        return ResponseEntity.ok(Map.of(
-                "infringe", !zonas.isEmpty(),
-                "zonasAfectadas", zonas
-        ));
-    }
-
     @DeleteMapping("/eliminar/{id}")
     public ResponseEntity<Void> eliminarTipo(@PathVariable Long id) {
         zonaProhibidaService.eliminarZona(id);
