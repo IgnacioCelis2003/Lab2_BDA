@@ -1,5 +1,7 @@
 package com.Lab1BDA.Backend.service;
 
+import com.Lab1BDA.Backend.dto.ZonaProhibidaDTO;
+import com.Lab1BDA.Backend.exception.ResourceNotFoundException;
 import com.Lab1BDA.Backend.model.ZonaProhibida;
 import com.Lab1BDA.Backend.repository.ZonaProhibidaRepository;
 import org.locationtech.jts.geom.Polygon;
@@ -17,9 +19,11 @@ public class ZonaProhibidaService {
     private ZonaProhibidaRepository zonaRepository;
 
     private final WKTReader wktReader = new WKTReader();
+    @Autowired
+    private ZonaProhibidaRepository zonaProhibidaRepository;
 
-    public List<ZonaProhibida> listarTodas() {
-        return zonaRepository.findAll();
+    public List<ZonaProhibidaDTO> listarTodas() {
+        return zonaRepository.findAllAsString();
     }
 
     public ZonaProhibida crearZona(String nombre, String wkt) {
@@ -48,5 +52,15 @@ public class ZonaProhibidaService {
             return List.of();
         }
         return zonaRepository.encontrarInfracciones(rutaWkt);
+    }
+
+    /*
+    public ZonaProhibida getZonaPorId(Long id) {
+        return zonaProhibidaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Tipo de misión no encontrado con id: " + id));
+    }*/
+
+    public void eliminarZona(Long id) {
+        zonaProhibidaRepository.deleteById(id);
     }
 }

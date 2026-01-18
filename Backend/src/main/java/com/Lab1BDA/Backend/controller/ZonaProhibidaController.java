@@ -1,5 +1,6 @@
 package com.Lab1BDA.Backend.controller;
 
+import com.Lab1BDA.Backend.dto.ZonaProhibidaDTO;
 import com.Lab1BDA.Backend.model.ZonaProhibida;
 import com.Lab1BDA.Backend.service.ZonaProhibidaService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,9 +17,11 @@ public class ZonaProhibidaController {
 
     @Autowired
     private ZonaProhibidaService zonaService;
+    @Autowired
+    private ZonaProhibidaService zonaProhibidaService;
 
     @GetMapping("/listar")
-    public List<ZonaProhibida> listarZonas() {
+    public List<ZonaProhibidaDTO> listarZonas() {
         return zonaService.listarTodas();
     }
 
@@ -41,5 +44,11 @@ public class ZonaProhibidaController {
                 "infringe", !zonas.isEmpty(),
                 "zonasAfectadas", zonas
         ));
+    }
+
+    @DeleteMapping("/eliminar/{id}")
+    public ResponseEntity<Void> eliminarTipo(@PathVariable Long id) {
+        zonaProhibidaService.eliminarZona(id);
+        return ResponseEntity.noContent().build();
     }
 }

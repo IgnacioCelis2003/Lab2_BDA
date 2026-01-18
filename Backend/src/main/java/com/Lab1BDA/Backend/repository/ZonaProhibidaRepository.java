@@ -1,11 +1,12 @@
 package com.Lab1BDA.Backend.repository;
 
+import com.Lab1BDA.Backend.dto.ZonaProhibidaDTO;
 import com.Lab1BDA.Backend.model.ZonaProhibida;
-import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.Polygon;
 import org.locationtech.jts.io.WKBWriter;
 import org.locationtech.jts.io.WKTReader;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -43,19 +44,46 @@ public class ZonaProhibidaRepository {
     }
 
     public List<ZonaProhibida> findAll() {
-        // Convertimos la geometría a texto (WKT) para leerla fácilmente
-        String sql = "SELECT zona_id, nombre, ST_AsText(area) as area_wkt FROM zonas_prohibidas";
+        String sql = "SELECT zona_id, nombre, ST_AsText(area) AS area_wkt FROM zonas_prohibidas";
+
         return jdbcTemplate.query(sql, (rs, rowNum) -> {
-            ZonaProhibida z = new ZonaProhibida();
-            z.setId(rs.getLong("zona_id"));
-            z.setNombre(rs.getString("nombre"));
+            Long id = rs.getLong("zona_id");
+            String nombre = rs.getString("nombre");
+            String areaWkt = rs.getString("area_wkt");
+            Polygon area = null;
+
             try {
-                z.setArea((Polygon) wktReader.read(rs.getString("area_wkt")));
+                area = (Polygon) wktReader.read(areaWkt);
             } catch (Exception e) {
-                // Manejar error de parseo si es necesario
+                throw new RuntimeException("Error al convertir WKT a Polygon para la zona: " + nombre, e);
             }
-            return z;
+
+            return new ZonaProhibida(id, nombre, area);
         });
+    }
+
+    public List<ZonaProhibidaDTO> findAllAsString() {
+        String sql = "SELECT zona_id, nombre, ST_AsText(area) AS area FROM zonas_prohibidas";
+
+        return jdbcTemplate.query(sql, (rs, rowNum) -> {
+            ZonaProhibidaDTO dto = new ZonaProhibidaDTO(
+                    rs.getLong("zona_id"),
+                    rs.getString("nombre"),
+                    rs.getString("area"));
+            return dto;
+        });
+    }
+
+    public void deleteById(Long id) {
+        String sql = "DELETE FROM zonas_prohibidas WHERE zona_id = ?";
+        try {
+            int rows = jdbcTemplate.update(sql, id);
+            if (rows == 0) {
+                throw new RuntimeException("No se encontró la zona prohibida con id: " + id);
+            }
+        } catch (DataAccessException e) {
+            throw new RuntimeException("Error al eliminar la zona prohibida con id: " + id, e);
+        }
     }
 
     /**
