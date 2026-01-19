@@ -16,6 +16,8 @@ import { ref, onMounted } from 'vue';
 const map = ref(null);
 const markers = ref({});
 const drones = ref([]);
+const zonas = ref([]);
+const layerGroup = ref(null);
 let L; // Leaflet import dinámico
 let popupInterval = null;
 
@@ -95,6 +97,53 @@ async function fetchVelocidad(idMision) {
         console.error("Error trayendo velocidad", e);
         return null;
     }
+}
+
+// Parse WKT POLYGON((lng lat, ...)) -> [[lat, lng], ...]
+function parseWKT(wkt) {
+  try {
+    const coordsString = wkt.replace('POLYGON((', '').replace('))', '');
+    const pairs = coordsString.split(',');
+    return pairs.map(pair => {
+      const [lng, lat] = pair.trim().split(' ').map(Number);
+      return [lat, lng];
+    });
+  } catch (e) {
+    console.error('Error parseando WKT:', e);
+    return [];
+  }
+}
+
+function drawZonas() {
+  if (!layerGroup.value || !zonas.value) return;
+  layerGroup.value.clearLayers();
+
+  zonas.value.forEach(zona => {
+    const latLngs = parseWKT(zona.area);
+    if (latLngs.length > 0) {
+      const polygon = L.polygon(latLngs, {
+        color: '#ff4444',
+        fillColor: '#ff4444',
+        fillOpacity: 0.25
+      }).bindPopup(`<b>${zona.nombre}</b><br>ID: ${zona.id}`);
+
+      layerGroup.value.addLayer(polygon);
+    }
+  });
+
+  if (layerGroup.value.getLayers().length > 0) {
+    try { map.value.fitBounds(layerGroup.value.getBounds()); } catch (e) {}
+  }
+}
+
+async function fetchZonas() {
+  try {
+    const data = await $fetch('/api/zonas/all');
+    zonas.value = data || [];
+    drawZonas();
+  } catch (e) {
+    console.error('Error trayendo zonas:', e);
+  }
 }
 
 // Obtener drones y actualizar marcadores
@@ -178,9 +227,12 @@ onMounted(async () => {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map.value);
 
-  // Primer fetch y actualización periódica
-  await fetchDrones();
-  //setInterval(fetchDrones, 5000);
+  // Grupo para zonas prohibidas
+  layerGroup.value = L.featureGroup().addTo(map.value);
+
+  // Primer fetch y actualizaciones
+  await Promise.all([fetchDrones(), fetchZonas()]);
+  //setInterval(() => { fetchDrones(); fetchZonas(); }, 5000);
 });
 </script>
 

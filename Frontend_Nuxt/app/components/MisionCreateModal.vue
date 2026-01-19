@@ -1,13 +1,8 @@
-Para lograr esto, necesitamos hacer tres cosas principales:
-
 Agregar campos numéricos en el formulario para la altitud de inicio y fin.
 
 Interceptar el WKT que viene del mapa (que es 2D) y combinarlo con esas altitudes antes de enviarlo al backend.
 
 Parsear el WKT cuando se edita una misión existente para extraer las altitudes guardadas y mostrarlas en los inputs.
-
-Aquí tienes el código modificado. He añadido comentarios marcados con `` y // NUEVO donde hice cambios.
-
 HTML
 <template>
   <div
@@ -94,6 +89,8 @@ HTML
           </div>
         </div>
 
+        <p v-if="formError" class="error" style="color: #e84848">{{ formError }}</p>
+
         <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
           <button type="button" class="secondary" @click="cancel" :disabled="saving">Cancelar</button>
           <button type="submit" :disabled="saving" class="contrast">
@@ -101,7 +98,7 @@ HTML
           </button>
         </div>
 
-        <p v-if="formError" class="error" style="color: var(--error)">{{ formError }}</p>
+        
       </form>
     </div>
   </div>

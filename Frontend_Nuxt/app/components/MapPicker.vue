@@ -15,10 +15,12 @@ const emit = defineEmits<{
 }>();
 
 const mapRef = ref<HTMLDivElement | null>(null);
+const zonas = ref<{ id: number; nombre: string; area: string }[]>([]);
 let map: L.Map | null = null;
 let marker: L.Marker | null = null;
 let markers: L.Marker[] = [];
 let polyline: L.Polyline | null = null;
+let zonasLayer: L.FeatureGroup | null = null;
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
@@ -29,6 +31,48 @@ Icon.Default.mergeOptions({
   iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).href,
   shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
 });
+
+// Parse WKT POLYGON((lng lat, ...)) -> [[lat, lng], ...]
+function parseWKT(wkt: string) {
+  try {
+    const coordsString = wkt.replace('POLYGON((', '').replace('))', '');
+    const pairs = coordsString.split(',');
+    return pairs.map(pair => {
+      const [lng, lat] = pair.trim().split(' ').map(Number);
+      return [lat, lng] as [number, number];
+    });
+  } catch (e) {
+    console.error('Error parseando WKT:', e);
+    return [];
+  }
+}
+
+function drawZonas() {
+  if (!zonasLayer || !zonas.value) return;
+  zonasLayer.clearLayers();
+
+  zonas.value.forEach(zona => {
+    const latLngs = parseWKT(zona.area);
+    if (latLngs.length > 0) {
+      const polygon = L.polygon(latLngs, {
+        color: '#ff4444',
+        fillColor: '#ff4444',
+        fillOpacity: 0.25
+      }).bindPopup(`<b>${zona.nombre}</b><br>ID: ${zona.id}`);
+      zonasLayer!.addLayer(polygon);
+    }
+  });
+}
+
+async function fetchZonas() {
+  try {
+    const data = await $fetch<{ id: number; nombre: string; area: string }[]>('/api/zonas/all');
+    zonas.value = data || [];
+    drawZonas();
+  } catch (e) {
+    console.error('Error trayendo zonas:', e);
+  }
+}
 
 onMounted(() => {
   if (!mapRef.value) return;
@@ -45,6 +89,10 @@ onMounted(() => {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
+
+  // Layer para zonas prohibidas
+  zonasLayer = L.featureGroup().addTo(map);
+  fetchZonas();
 
   // initialize marker(s) depending on mode
   if (props.mode === 'route') {
