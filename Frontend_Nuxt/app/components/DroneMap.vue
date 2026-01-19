@@ -17,6 +17,7 @@ const map = ref(null);
 const markers = ref({});
 const drones = ref([]);
 let L; // Leaflet import dinámico
+let popupInterval = null;
 
 // Crear icono según nivel de batería
 function getDroneIcon(bateria) {
@@ -42,6 +43,37 @@ function getDroneIcon(bateria) {
     iconAnchor: [15, 15], 
     popupAnchor: [0, -15]
   });
+}
+
+// Función auxiliar para pintar el HTML (Para no repetir código)
+function updatePopupHTML(idMision, data) {
+    const container = document.getElementById(`speed-content-${idMision}`);
+    if (!container) return; // Si el usuario cerró el popup rápido, no hacemos nada
+
+    if (data) {
+        // Usamos el último dato del array
+        const actual = Array.isArray(data) ? data[data.length - 1] : data;
+        
+        container.innerHTML = `
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9rem;">
+                <div>🚀 Velocidad media:</div>
+                <div style="font-weight:bold; color: #2563eb">
+                    ${(actual.velocidadCalculada || 0).toFixed(2)} km/h
+                </div>
+                
+                <div>📏 Distancia recorrida:</div>
+                <div>${(actual.distanciaRecorrida || 0).toFixed(1)} m</div>
+                
+                <div>⏱️ Tiempo transcurrido:</div>
+                <div>${(actual.segundosTranscurridos || 0).toFixed(1)} s</div>
+            </div>
+            <div style="font-size:0.7em; color:#999; text-align:right; margin-top:5px;">
+               En vivo 🟢
+            </div>
+        `;
+    } else {
+        container.innerHTML = '<span style="color:gray">Esperando datos...</span>';
+    }
 }
 
 async function fetchVelocidad(idMision) {
@@ -76,18 +108,15 @@ async function fetchDrones() {
       const icon = getDroneIcon(drone.nivelBateriaPorcentaje);
 
       // Contenido base del Popup
-      const basePopupContent = `
-         <div style="min-width: 150px">
-            <h4 style="margin:0 0 5px 0; color: #333;">Misión #${drone.idMision}</h4>
-            <div>🔋 Batería: <b>${drone.nivelBateriaPorcentaje}%</b></div>
-            <div style="font-size: 0.8em; color: #666; margin-bottom: 5px">
-                Actualizado: ${new Date(drone.timestamp).toLocaleTimeString()}
-            </div>
-            <hr style="margin: 5px 0; border: 0; border-top: 1px solid #eee;">
-            <div id="speed-content-${drone.idMision}" style="font-size: 0.9em;">
-                <i>Haga clic para ver telemetría...</i>
-            </div>
-         </div>
+      const popupContent = `
+        <div style="min-width: 160px">
+          <h4 style="margin:0 0 5px 0; color: #333;">Misión #${drone.idMision}</h4>
+          <div>🔋 Batería: <b>${drone.nivelBateriaPorcentaje}%</b></div>
+          <hr style="margin: 5px 0; border: 0; border-top: 1px solid #eee;">
+          <div id="speed-content-${drone.idMision}">
+            <i>Cargando telemetría...</i>
+          </div>
+        </div>
       `;
 
       let marker;
@@ -98,46 +127,36 @@ async function fetchDrones() {
         marker.setLatLng([drone.latitud, drone.longitud]);
         marker.setIcon(icon);
         if (!marker.isPopupOpen()) {
-          marker.bindPopup(basePopupContent);
+          marker.bindPopup(popupContent);
         }
       } else {
         // Si es nuevo, lo creamos
         marker = L.marker([drone.latitud, drone.longitud], { icon }).addTo(map.value);
-        marker.bindPopup(basePopupContent);
+        marker.bindPopup(popupContent);
         markers.value[drone.idMision] = marker;
         
         // Evento al hacer clic en el marcador 
-        marker.on('click', async () => {
-          // 1. Buscamos el contenedor del popup (si está abierto)
-          const container = document.getElementById(`speed-content-${drone.idMision}`);
-          if (container) {
-            container.innerHTML = 'Calculando velocidad media... ⏳';
-          }
+        marker.on('popupopen', async () => {
+          // Limpiamos cualquier timer anterior por seguridad
+          if (popupInterval) clearInterval(popupInterval);
 
-          // 2. Llamamos al Backend
-          const velocidadData = await fetchVelocidad(drone.idMision);
+          // Primera carga inmediata
+          const dataInicial = await fetchVelocidad(drone.idMision);
+          updatePopupHTML(drone.idMision, dataInicial);
 
-          // 3. Actualizamos el HTML del popup con el resultado
-          const finalContainer = document.getElementById(`speed-content-${drone.idMision}`);
-          if (finalContainer) {
-            if (velocidadData) {
-              finalContainer.innerHTML = `
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 5px;">
-                  <div>🚀 Velocidad media:</div>
-                  <div style="font-weight:bold; color: #2563eb">
-                    ${(velocidadData.velocidadCalculada || 0).toFixed(2)} km/h
-                  </div>
-                    
-                  <div>📏 Distancia recorrida:</div>
-                  <div>${(velocidadData.distanciaRecorrida || 0).toFixed(1)} m</div>
-                    
-                  <div>⏱️ Tiempo transcurrido:</div>
-                  <div>${(velocidadData.segundosTranscurridos || 0).toFixed(1)} s</div>
-                </div>
-            `;
-            } else {
-              finalContainer.innerHTML = '<span style="color:red">Error calculando datos</span>';
-            }
+          // Iniciar ciclo de actualización cada 2 segundos (o lo que quieras)
+          popupInterval = setInterval(async () => {
+            const dataNueva = await fetchVelocidad(drone.idMision);
+            updatePopupHTML(drone.idMision, dataNueva);
+          }, 2000); 
+        });
+
+        // 2. Cuando se cierra el popup
+        marker.on('popupclose', () => {
+          if (popupInterval) {
+            clearInterval(popupInterval);
+            popupInterval = null;
+            console.log("Monitoreo detenido para misión", drone.idMision);
           }
         });
       }
