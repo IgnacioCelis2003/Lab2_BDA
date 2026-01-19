@@ -17,7 +17,6 @@ public class PuntoInteres {
 
     @JsonIgnore
     private Point ubicacion;
-
     @JsonProperty("ubicacionWKT")
     public String getUbicacionWKT() {
         if (this.ubicacion == null) return null;

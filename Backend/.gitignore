@@ -4,6 +4,8 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+
+
 ### STS ###
 .apt_generated
 .classpath
@@ -31,4 +33,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Ignore SecurityConfig.java
+src/main/java/com/Lab1BDA/Backend/config/SecurityConfig.java
 
