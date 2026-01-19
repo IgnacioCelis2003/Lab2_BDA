@@ -155,7 +155,14 @@ public class RegistroVueloService {
 
             double lon = registro.getCoordenadas().getX();
             double lat = registro.getCoordenadas().getY();
-            // Cálculo de la nueva posición del dron
+
+            // Obtener la altitud actual del registro
+            double alt = registro.getCoordenadas().getCoordinate().getZ();
+            if (Double.isNaN(alt)) {
+                alt = registro.getAltitudMsnm() != null ? registro.getAltitudMsnm() : 0.0;
+            }
+
+            // Cálculo de la nueva posición del dron en X e Y
             // X->Longitud | Y->Latitud
             double dx = destino.getX() - lon;
             double dy = destino.getY() - lat;
@@ -166,9 +173,46 @@ public class RegistroVueloService {
                             Math.pow(dy * metrosPorGradoLat, 2)
             );
             double distanciaAvance = (velocidad / 3.6) * segundos;
+
             double nuevaLat;
             double nuevaLon;
-            // Verificar que el dron no se pasó de su destino
+            double nuevaAlt;
+
+            // Obtener altitudes de inicio y fin de la ruta
+            double altitudInicio = mision.getRuta().getStartPoint().getCoordinate().getZ();
+            double altitudFin = mision.getRuta().getEndPoint().getCoordinate().getZ();
+
+            // Manejar casos donde Z sea NaN
+            if (Double.isNaN(altitudInicio)) altitudInicio = 0.0;
+            if (Double.isNaN(altitudFin)) altitudFin = 0.0;
+
+            // Calcular la distancia total de la ruta para normalizar
+            double dxTotal = mision.getRuta().getEndPoint().getX() - mision.getRuta().getStartPoint().getX();
+            double dyTotal = mision.getRuta().getEndPoint().getY() - mision.getRuta().getStartPoint().getY();
+            double distanciaTotal = Math.sqrt(
+                    Math.pow(dxTotal * metrosPorGradoLon, 2) +
+                    Math.pow(dyTotal * metrosPorGradoLat, 2)
+            );
+
+            // Normalizar x entre 0 y 1 (progreso del vuelo)
+            double progreso = distanciaTotal > 0 ? 1.0 - (distanciaRestante / distanciaTotal) : 1.0;
+            progreso = Math.max(0.0, Math.min(1.0, progreso)); // Clamp entre 0 y 1
+
+            // Interpolación lineal entre altitud inicio y fin, con una curva parabólica para simular ascenso/descenso
+            // f(x) = altInicio + (altFin - altInicio) * x + 4 * altMax * x * (1 - x)
+            // donde altMax es la altitud máxima adicional en el punto medio del vuelo
+            double altitudMaxAdicional = 100.0; // Metros adicionales en el punto más alto
+            nuevaAlt = altitudInicio + (altitudFin - altitudInicio) * progreso + 4 * altitudMaxAdicional * progreso * (1 - progreso);
+
+            // Asegurar que nuevaAlt esté dentro de límites razonables
+            if (nuevaAlt < 0) {
+                nuevaAlt = 0;
+            }
+            if (nuevaAlt > 800) {
+                nuevaAlt = 800;
+            }
+
+            // Verificar que el dron no se pasó de su destino en X e Y
             if (distanciaAvance >= distanciaRestante) {
                 // Llegó o se pasó
                 nuevaLat = destino.getY();
@@ -177,7 +221,6 @@ public class RegistroVueloService {
                 dron.setEstado("Disponible");
                 dronRepository.update(dron);
                 misionRepository.update(mision);
-                registroVueloRepository.save(nuevoRegistro);
             } else {
                 double modulo = Math.sqrt(dx*dx + dy*dy);
                 double dirX = dx / modulo;
@@ -187,10 +230,13 @@ public class RegistroVueloService {
                 nuevaLat = lat + deltaLat;
                 nuevaLon = lon + deltaLon;
             }
-            // Pasar las coordenadas a Point y agregar tiempo
+            // Pasar las coordenadas a Point 3D y agregar tiempo
             GeometryFactory geometryFactory = new GeometryFactory();
-            Point nuevasCoordenadas = geometryFactory.createPoint(new Coordinate(nuevaLon, nuevaLat));
+            Coordinate coord3d = new Coordinate(nuevaLon, nuevaLat, nuevaAlt);
+            Point nuevasCoordenadas = geometryFactory.createPoint(coord3d);
+            nuevasCoordenadas.setSRID(4326); // Importante para PostGIS
             nuevoRegistro.setCoordenadas(nuevasCoordenadas);
+            nuevoRegistro.setAltitudMsnm(nuevaAlt);
             nuevoRegistro.setTimestamp(LocalDateTime.now());
             registroVueloRepository.save(nuevoRegistro);
             registrosActualizados.add(nuevoRegistro);
