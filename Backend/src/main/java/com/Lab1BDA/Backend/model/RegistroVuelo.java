@@ -28,4 +28,8 @@ public class RegistroVuelo {
         if (this.coordenadas == null) return null;
         return new WKTWriter(3).write(this.coordenadas);
     }
+
+    public Double getAltitudMsnm() {
+        return altitudMsnm;
+    }
 }

@@ -10,5 +10,6 @@ public record UbicacionDTO(
     LocalDateTime timestamp,
     double latitud,
     double longitud,
+    double altitudMsnm,
     Double nivelBateriaPorcentaje
 ) {}

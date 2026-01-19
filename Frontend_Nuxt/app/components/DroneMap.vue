@@ -106,12 +106,14 @@ async function fetchDrones() {
 
     drones.value.forEach(drone => {
       const icon = getDroneIcon(drone.nivelBateriaPorcentaje);
+      console.log(drone.altitud)
 
       // Contenido base del Popup
       const popupContent = `
         <div style="min-width: 160px">
           <h4 style="margin:0 0 5px 0; color: #333;">Misión #${drone.idMision}</h4>
           <div>🔋 Batería: <b>${drone.nivelBateriaPorcentaje}%</b></div>
+          <div>🔋 Altitud Actual: <b>${drone.altitudMsnm}</b></div>
           <hr style="margin: 5px 0; border: 0; border-top: 1px solid #eee;">
           <div id="speed-content-${drone.idMision}">
             <i>Cargando telemetría...</i>

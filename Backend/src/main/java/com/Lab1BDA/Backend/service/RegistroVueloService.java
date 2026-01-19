@@ -102,12 +102,14 @@ public class RegistroVueloService {
         // Correccion de coordenadas
         double latitud = registro.getCoordenadas().getY();
         double longitud = registro.getCoordenadas().getX();
+        double altitud = registro.getAltitudMsnm();
 
         return new UbicacionDTO(
                 registro.getIdMision(),
                 registro.getTimestamp(),
                 latitud,
                 longitud,
+                altitud,
                 registro.getNivelBateriaPorcentaje()
         );
     }
