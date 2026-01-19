@@ -1,6 +1,6 @@
 --Limpieza de datos y reinicio de id
 TRUNCATE TABLE registro_vuelo, misiones, zonas_prohibidas, puntos_interes, tipos_mision, usuarios, drones, modelos_dron RESTART IDENTITY CASCADE;
-
+--EJECUTAR TABLA POR TABLA PARA EVITAR ERRORES DE LLAVES FORANEA
 --Usuario de prueba (no para acceso)
 
 INSERT INTO usuarios(nombre,email,contrasena_hash,rol) VALUES ('test','test','test','Operador');
@@ -147,4 +147,5 @@ INSERT INTO registro_vuelo (id_mision, "timestamp", coordenadas, altitud_msnm, v
 (4, '2026-01-20 12:05:00', ST_GeographyFromText('POINTZ(-70.66076 -33.44800 100.0)'), 100.0, 50.0, 75.0), -- Punto a ~1000m
 (4, '2026-01-20 12:07:00', ST_GeographyFromText('POINTZ(-70.66100 -33.44700 105.0)'), 105.0, 52.0, 70.0),
 (4, '2026-01-20 12:09:00', ST_GeographyFromText('POINTZ(-70.66150 -33.44600 110.0)'), 110.0, 55.0, 65.0);
+
 
