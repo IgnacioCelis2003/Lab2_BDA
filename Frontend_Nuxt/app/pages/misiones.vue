@@ -287,7 +287,7 @@ function formatearRuta(ruta: GeoJSON | null): string {
     <!-- Modal crear -->
     <MisionCreateModal v-model:show="showModal" @created="onCreated" />
 
-    <!-- Modal editar (debes crear este componente) -->
+    <!-- Modal editar -->
     <MisionCreateModal
       v-model:show="showEditModal"
       :mision="selectedMision"
