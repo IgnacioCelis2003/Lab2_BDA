@@ -276,9 +276,23 @@ public class MisionRepository {
      */
     public List<ResumenMisionTipoDTO> findResumenMisionesCompletadas() {
         // La consulta es simple porque el trabajo pesado ya lo hizo la vista materializada.
-        String sql = "SELECT nombre_tipo, cantidad_total, promedio_horas " +
-                "FROM resumen_misiones_completadas " +
-                "ORDER BY nombre_tipo";
+        String sql = """
+            SELECT 
+                tm.nombre_tipo, 
+                COUNT(m.id_mision) AS cantidad_total,
+                -- Calculamos el promedio en horas al vuelo
+                AVG(EXTRACT(EPOCH FROM (m.fecha_fin_real - m.fecha_inicio_real)) / 3600.0) AS promedio_horas
+            FROM 
+                misiones m
+            JOIN 
+                tipos_mision tm ON m.id_tipo_mision = tm.id_tipo_mision
+            WHERE 
+                m.estado = 'Completada'::estado_mision
+            GROUP BY 
+                tm.nombre_tipo
+            ORDER BY 
+                tm.nombre_tipo
+        """;
 
         return jdbcTemplate.query(sql, new ResumenMisionTipoRowMapper());
     }
