@@ -44,6 +44,27 @@ function getDroneIcon(bateria) {
   });
 }
 
+async function fetchVelocidad(idMision) {
+    try {
+        // 1. Hacemos la petición (Recibimos un ARRAY de datos históricos)
+        const data = await $fetch(`/api/telemetria/mision/velocidad-media/${idMision}`);
+        
+        // 2. Validación de seguridad
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.warn("No hay datos de velocidad para misión", idMision);
+            return null;
+        }
+
+        // 3. Tomamos el ultimo dato (el más reciente en el tiempo)
+        const datoActual = data[data.length - 1];
+
+        return datoActual; 
+    } catch (e) {
+        console.error("Error trayendo velocidad", e);
+        return null;
+    }
+}
+
 // Obtener drones y actualizar marcadores
 async function fetchDrones() {
   try {
@@ -54,24 +75,71 @@ async function fetchDrones() {
     drones.value.forEach(drone => {
       const icon = getDroneIcon(drone.nivelBateriaPorcentaje);
 
+      // Contenido base del Popup
+      const basePopupContent = `
+         <div style="min-width: 150px">
+            <h4 style="margin:0 0 5px 0; color: #333;">Misión #${drone.idMision}</h4>
+            <div>🔋 Batería: <b>${drone.nivelBateriaPorcentaje}%</b></div>
+            <div style="font-size: 0.8em; color: #666; margin-bottom: 5px">
+                Actualizado: ${new Date(drone.timestamp).toLocaleTimeString()}
+            </div>
+            <hr style="margin: 5px 0; border: 0; border-top: 1px solid #eee;">
+            <div id="speed-content-${drone.idMision}" style="font-size: 0.9em;">
+                <i>Haga clic para ver telemetría...</i>
+            </div>
+         </div>
+      `;
+
+      let marker;
+
       if (markers.value[drone.idMision]) {
         // Actualizar posición y popup
-        markers.value[drone.idMision].setLatLng([drone.latitud, drone.longitud]);
-        markers.value[drone.idMision].setIcon(icon);
-        markers.value[drone.idMision].bindPopup(`
-          <b>Misión #${drone.idMision}</b><br>
-          Batería: ${drone.nivelBateriaPorcentaje}%<br>
-          Última actualización: ${new Date(drone.timestamp).toLocaleString()}
-        `);
+        marker = markers.value[drone.idMision];
+        marker.setLatLng([drone.latitud, drone.longitud]);
+        marker.setIcon(icon);
+        if (!marker.isPopupOpen()) {
+          marker.bindPopup(basePopupContent);
+        }
       } else {
-        // Crear nuevo marcador
-        const marker = L.marker([drone.latitud, drone.longitud], { icon }).addTo(map.value);
-        marker.bindPopup(`
-          <b>Misión #${drone.idMision}</b><br>
-          Batería: ${drone.nivelBateriaPorcentaje}%<br>
-          Última actualización: ${new Date(drone.timestamp).toLocaleString()}
-        `);
+        // Si es nuevo, lo creamos
+        marker = L.marker([drone.latitud, drone.longitud], { icon }).addTo(map.value);
+        marker.bindPopup(basePopupContent);
         markers.value[drone.idMision] = marker;
+        
+        // Evento al hacer clic en el marcador 
+        marker.on('click', async () => {
+          // 1. Buscamos el contenedor del popup (si está abierto)
+          const container = document.getElementById(`speed-content-${drone.idMision}`);
+          if (container) {
+            container.innerHTML = 'Calculando velocidad media... ⏳';
+          }
+
+          // 2. Llamamos al Backend
+          const velocidadData = await fetchVelocidad(drone.idMision);
+
+          // 3. Actualizamos el HTML del popup con el resultado
+          const finalContainer = document.getElementById(`speed-content-${drone.idMision}`);
+          if (finalContainer) {
+            if (velocidadData) {
+              finalContainer.innerHTML = `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                  <div>🚀 Velocidad media:</div>
+                  <div style="font-weight:bold; color: #2563eb">
+                    ${(velocidadData.velocidadCalculada || 0).toFixed(2)} km/h
+                  </div>
+                    
+                  <div>📏 Distancia recorrida:</div>
+                  <div>${(velocidadData.distanciaRecorrida || 0).toFixed(1)} m</div>
+                    
+                  <div>⏱️ Tiempo transcurrido:</div>
+                  <div>${(velocidadData.segundosTranscurridos || 0).toFixed(1)} s</div>
+                </div>
+            `;
+            } else {
+              finalContainer.innerHTML = '<span style="color:red">Error calculando datos</span>';
+            }
+          }
+        });
       }
     });
   } catch (error) {

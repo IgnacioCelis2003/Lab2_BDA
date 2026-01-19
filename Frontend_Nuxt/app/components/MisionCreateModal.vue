@@ -257,7 +257,7 @@ watch(
       form.fechaFinPlanificada = toLocalInput(props.mision.fechaFinPlanificada);
       form.estado = props.mision.estado || "Pendiente";
       
-      // NUEVO: Lógica de parseo para recuperar altura
+      // Lógica de parseo para recuperar altura
       const wkt = props.mision.rutaWKT || "";
       form.rutaWKT = wkt; // El mapa necesita el WKT base
 

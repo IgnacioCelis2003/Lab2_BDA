@@ -1,4 +1,3 @@
-// server/api/telemetria/mision/[id].get.ts
 import { getCookie, createError, getRouterParam } from "h3";
 
 export default defineEventHandler(async (event) => {
