@@ -3,7 +3,7 @@ Laboratorio N°2 de Base de datos avanzada
 
 Para clonar el repositorio en su computador, abra una consola ya sea cmd o algun powershell en la ruta de destino e ingrese el comando: git clone https://github.com/IgnacioCelis2003/Lab2_BDA.git
 
-Una vez clonado el repositorio abra el programa que tiene para ver la base de datos (ya sea pgAdmin 4 u otros), una vez dentro del programa, en el servidor PostgreSQL 17 (instalar PostgreSQL 17 en caso de no tenerlo) se debe crear una base de datos llamada Lab2BDA.
+Una vez clonado el repositorio abra el programa que tiene para ver la base de datos (ya sea pgAdmin 4 u otros), una vez dentro del programa, en el servidor PostgreSQL 17 (instalar PostgreSQL 17 en caso de no tenerlo) se debe crear una base de datos llamada Lab2BDA. Asegurarse también tener instalada la extensión de PostGIS, versión 3.6.1.
 
 Con la base de datos creada, se debe abrir una ventana de consulta Query dentro de la base de datos Lab2BDA, una vez dentro de la pestaña se debe abrir el archivo llamado Crear_BD.sql copiar todo su contenido, pegarlo en la pestaña de consuta Query y ejecutarlo. Si da algun error con respecto a malformacion de tablas o conflictos entre tablas, agregar y ejecutar uno por uno los CREATE.
 
