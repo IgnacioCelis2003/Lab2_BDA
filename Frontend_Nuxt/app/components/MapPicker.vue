@@ -7,12 +7,35 @@ import { ref, onMounted, watch } from 'vue';
 import L, { Icon } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const props = defineProps<{ lat?: number; lon?: number; mode?: 'single' | 'route'; rutaWKT?: string | null }>();
+const props = defineProps<{ 
+  lat?: number; 
+  lon?: number; 
+  altitudInicio?: number | null;
+  altitudFin?: number | null;
+  mode?: 'single' | 'route'; 
+  rutaWKT?: string | null 
+}>();
 const emit = defineEmits<{
   (e: 'update:lat', v: number): void;
   (e: 'update:lon', v: number): void;
+  (e: 'update:altitudInicio', v: number | null): void;
+  (e: 'update:altitudFin', v: number | null): void;
   (e: 'update:rutaWKT', v: string | null): void;
 }>();
+
+// Fetch elevation para un punto de ruta (inicio o fin)
+async function fetchRouteElevation(lon: number, lat: number, point: 'inicio' | 'fin') {
+  try {
+    const data = await $fetch<{ elevation: number }>(`/api/elevation/${lon}/${lat}`);
+    if (point === 'inicio') {
+      emit('update:altitudInicio', Math.round(data.elevation));
+    } else {
+      emit('update:altitudFin', Math.round(data.elevation));
+    }
+  } catch (e) {
+    console.error(`Error obteniendo elevación punto ${point}:`, e);
+  }
+}
 
 const mapRef = ref<HTMLDivElement | null>(null);
 const zonas = ref<{ id: number; nombre: string; area: string }[]>([]);
@@ -122,10 +145,15 @@ onMounted(() => {
         const m = L.marker([lat, lon], { draggable: true }).addTo(map!);
         m.on('dragend', onRouteMarkerDrag);
         markers.push(m);
+        // Fetch elevation para el punto recién agregado
+        const pointType = markers.length === 1 ? 'inicio' : 'fin';
+        fetchRouteElevation(lon, lat, pointType);
       } else {
         // replace second marker
         const m = markers[1];
         m.setLatLng([lat, lon]);
+        // Actualizar elevación del punto final
+        fetchRouteElevation(lon, lat, 'fin');
       }
       updatePolylineAndEmit();
       // emit last clicked as lat/lon as well
@@ -182,6 +210,14 @@ function onRouteMarkerDrag(ev: L.DragEndEvent) {
   const rlon = round6(p.lng);
   (ev.target as L.Marker).setLatLng([rlat, rlon]);
   updatePolylineAndEmit();
+  
+  // Determinar si es el marcador de inicio o fin y actualizar su elevación
+  const markerIndex = markers.indexOf(ev.target as L.Marker);
+  if (markerIndex === 0) {
+    fetchRouteElevation(rlon, rlat, 'inicio');
+  } else if (markerIndex === 1) {
+    fetchRouteElevation(rlon, rlat, 'fin');
+  }
 }
 
 function updatePolylineAndEmit() {
@@ -204,6 +240,8 @@ function clearRoute() {
   markers = [];
   if (polyline) polyline.setLatLngs([]);
   emit('update:rutaWKT', null);
+  emit('update:altitudInicio', null);
+  emit('update:altitudFin', null);
 }
 </script>
 

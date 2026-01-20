@@ -52,7 +52,12 @@ HTML
 
         <label>
           Ruta (selecciona 2 puntos en el mapa)
-          <MapPicker mode="route" v-model:rutaWKT="form.rutaWKT" />
+          <MapPicker 
+            mode="route" 
+            v-model:rutaWKT="form.rutaWKT"
+            v-model:altitudInicio="form.altitudInicio"
+            v-model:altitudFin="form.altitudFin"
+          />
         </label>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
@@ -65,8 +70,9 @@ HTML
               step="1" 
               required 
               :disabled="saving" 
-              placeholder="Ej: 100"
+              placeholder="Automático o manual"
             />
+            <small style="color: #888; font-size: 0.7rem;">Detectada automáticamente, editable</small>
           </label>
           <label>
             Altitud Fin (metros)
@@ -77,8 +83,9 @@ HTML
               step="1" 
               required 
               :disabled="saving" 
-              placeholder="Ej: 150"
+              placeholder="Automático o manual"
             />
+            <small style="color: #888; font-size: 0.7rem;">Detectada automáticamente, editable</small>
           </label>
         </div>
 
