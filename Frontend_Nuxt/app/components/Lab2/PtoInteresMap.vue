@@ -1,1050 +1,437 @@
-<script setup lang="ts">
-import { ref, onMounted } from "vue";
-import PtoInteresMap from "~/components/Lab2/PtoInteresMap.vue"; // Descomenta si lo necesitas aquí
-
-// =========================================
-// 1. INTERFACES
-// =========================================
-
-interface GeoJSON {
-  type: "Point";
-  coordinates: number[]; // [longitud, latitud]
-}
-
-interface PuntoInteresBD {
-  poi_id: number;
-  nombre: string;
-  descripcion?: string;
-  ubicacion: GeoJSON;
-}
-
-interface PuntoInteresUI extends PuntoInteresBD {
-  latitud: number;
-  longitud: number;
-}
-
-interface Mision {
-  idMision: number;
-  descripcion?: string;
-  estado: string;
-}
-
-interface MisionEstadisticaDTO {
-  misionId: number;
-  distanciaTotalMetros: number;
-  unidad: string;
-}
-
-interface ProximidadDTO {
-  misionId: number;
-  poiId: number;
-  distanciaMinima3DMetros: number;
-}
-
-// =========================================
-// 2. ESTADOS REACTIVOS
-// =========================================
-
-const misiones = ref<Mision[]>([]);
-const puntosInteres = ref<PuntoInteresUI[]>([]);
-
-const selectedMisionId = ref<string>("");
-const selectedPoiId = ref<string>("");
-const resultadoDistanciaVuelo = ref<string | null>(null);
-const resultadoProximidad = ref<string | null>(null);
-
-const loading = ref(false);
-const loadingProximidad = ref(false);
-const errorMsg = ref<string | null>(null);
-const mapaRef = ref<any>(null);
-
-// --- ESTADOS CRUD ---
-const showAdminPanel = ref(false);
-const loadingSave = ref(false);
-const isEditing = ref(false);
-
-// Variable para saber si estamos en modo "elegir ubicación" (Mapa 2)
-const isPickingLocation = ref(false);
-
-const poiForm = ref({
-  id: null as number | null,
-  nombre: "",
-  descripcion: "",
-  latitud: 0,
-  longitud: 0,
-});
-
-// =========================================
-// 3. CARGA DE DATOS
-// =========================================
-
-const cargarDatos = async () => {
-  try {
-    const resMisiones = await $fetch<Mision[]>("/api/misiones/all");
-    misiones.value = resMisiones || [];
-
-    const resPoi = await $fetch<PuntoInteresBD[]>("/api/puntosInteres/all");
-
-    puntosInteres.value = (resPoi || []).map((p) => {
-      let lat = 0;
-      let lon = 0;
-      if (p.ubicacion && Array.isArray(p.ubicacion.coordinates)) {
-        lon = p.ubicacion.coordinates[0] ?? 0;
-        lat = p.ubicacion.coordinates[1] ?? 0;
-      }
-      return { ...p, latitud: lat, longitud: lon };
-    });
-  } catch (error) {
-    console.error("Error cargando listas:", error);
-    errorMsg.value = "Error conectando con el servidor.";
-  }
-};
-
-// =========================================
-// 4. FUNCIONES DE MAPA (AQUÍ ESTÁN LAS DOS)
-// =========================================
-
-// --- A) PARA EL MAPA 1 (El que ya tenías) ---
-// Esta función la dejamos intacta para no romper tu mapa actual.
-const onMapaClick = (coords: { lat: number; lng: number }) => {
-  // Si el panel está abierto, actualizamos coordenadas (comportamiento original)
-  if (showAdminPanel.value) {
-    poiForm.value.latitud = parseFloat(coords.lat.toFixed(6));
-    poiForm.value.longitud = parseFloat(coords.lng.toFixed(6));
-  }
-};
-
-// --- B) PARA EL MAPA 2 (El nuevo para elegir ubicación) ---
-const activarSeleccionMapa = () => {
-  showAdminPanel.value = false; // Ocultamos modal
-  isPickingLocation.value = true; // Activamos bandera
-  alert("Haz clic en el mapa de selección para ubicar el punto.");
-};
-
-const onCoordenadaCapturada = (coords: { lat: number; lng: number }) => {
-  // Sin el "if (isPickingLocation)", así el clic siempre funciona
-  poiForm.value.latitud = parseFloat(coords.lat.toFixed(6));
-  poiForm.value.longitud = parseFloat(coords.lng.toFixed(6));
-
-  // Opcional: Para ver en la consola que funcionó
-  console.log(
-    "Coordenada fijada:",
-    poiForm.value.latitud,
-    poiForm.value.longitud,
-  );
-};
-
-// =========================================
-// 5. CÁLCULOS
-// =========================================
-
-async function calcularLongitudVuelo() {
-  if (!selectedMisionId.value) return;
-  try {
-    loading.value = true;
-    resultadoDistanciaVuelo.value = null;
-    const url = `/api/misiones/${selectedMisionId.value}/distancia`;
-    const response = await $fetch<MisionEstadisticaDTO>(url);
-    const metros = response.distanciaTotalMetros;
-
-    if (typeof metros === "number") {
-      resultadoDistanciaVuelo.value = `${(metros / 1000).toFixed(2)} km`;
-    } else {
-      resultadoDistanciaVuelo.value = "Datos no válidos";
-    }
-  } catch (error) {
-    resultadoDistanciaVuelo.value = "Error";
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function calcularProximidad() {
-  if (!selectedMisionId.value || !selectedPoiId.value) {
-    alert("Debes seleccionar Misión y POI.");
-    return;
-  }
-  try {
-    loadingProximidad.value = true;
-    resultadoProximidad.value = null;
-    const url = `/api/misiones/${selectedMisionId.value}/proximidad`;
-    const response = await $fetch<ProximidadDTO>(url, {
-      params: { poiId: selectedPoiId.value },
-    });
-    const metros = response.distanciaMinima3DMetros;
-
-    if (typeof metros === "number") {
-      resultadoProximidad.value =
-        metros < 1000
-          ? `${metros.toFixed(2)} m`
-          : `${(metros / 1000).toFixed(2)} km`;
-    } else {
-      resultadoProximidad.value = "Datos inválidos";
-    }
-  } catch (error) {
-    resultadoProximidad.value = "Error";
-  } finally {
-    loadingProximidad.value = false;
-  }
-}
-
-async function verRutaEnMapa() {
-  if (!selectedMisionId.value) {
-    alert("Selecciona una misión primero.");
-    return;
-  }
-  if (mapaRef.value) {
-    mapaRef.value.dibujarRutaVisual(selectedMisionId.value);
-  }
-}
-
-// =========================================
-// 6. GESTIÓN CRUD
-// =========================================
-
-const resetForm = () => {
-  poiForm.value = {
-    id: null,
-    nombre: "",
-    descripcion: "",
-    latitud: 0,
-    longitud: 0,
-  };
-  isEditing.value = false;
-  isPickingLocation.value = false;
-};
-
-const editarPunto = (poi: PuntoInteresUI) => {
-  poiForm.value = {
-    id: poi.poi_id,
-    nombre: poi.nombre,
-    descripcion: poi.descripcion || "",
-    latitud: poi.latitud,
-    longitud: poi.longitud,
-  };
-  isEditing.value = true;
-};
-
-const guardarPunto = async () => {
-  // 1. Validación completa (Nombre y Coordenadas)
-  if (
-    !poiForm.value.nombre ||
-    !poiForm.value.latitud ||
-    !poiForm.value.longitud
-  ) {
-    alert("Debes ingresar un nombre y seleccionar una ubicación en el mapa.");
-    return;
-  }
-
-  try {
-    loadingSave.value = true;
-
-    // 2. CORRECCIÓN: Enviamos los datos "planos"
-    // En vez de construir el GeoJSON aquí, mandamos lat y lng sueltos.
-    // El backend se encargará de convertirlos a geometría.
-    const payload = {
-      nombre: poiForm.value.nombre,
-      descripcion: poiForm.value.descripcion || "", // Evitar nulls
-      latitud: Number(poiForm.value.latitud),
-      longitud: Number(poiForm.value.longitud),
-    };
-
-    console.log("🚀 Enviando Payload:", payload);
-
-    if (isEditing.value && poiForm.value.id) {
-      // --- EDITAR (PUT) ---
-      await $fetch(`/api/puntosInteres/${poiForm.value.id}`, {
-        method: "PUT",
-        body: payload,
-      });
-      alert("Punto actualizado con éxito.");
-    } else {
-      // --- CREAR (POST) ---
-      await $fetch("/api/puntosInteres/crear", {
-        method: "POST",
-        body: payload,
-      });
-      alert("Punto creado con éxito.");
-    }
-
-    // 3. Refrescar la UI
-    // Importante: Si tienes una función para recargar la lista del servidor, llámala aquí.
-    // await fetchPuntosDeInteres();
-
-    // Si no tienes esa función a mano, recarga la página temporalmente:
-    window.location.reload();
-  } catch (error) {
-    console.error("❌ Error en la petición:", error);
-    alert(
-      "Error del servidor (500). Revisa que la base de datos esté conectada.",
-    );
-  } finally {
-    loadingSave.value = false;
-    showAdminPanel.value = false; // Cerramos el modal
-    resetForm();
-  }
-};
-
-const eliminarPunto = async (id: number) => {
-  if (!confirm("¿Eliminar este punto?")) return;
-  try {
-    loadingSave.value = true;
-    await $fetch(`/api/puntosInteres/${id}`, { method: "DELETE" });
-    await cargarDatos();
-    if (selectedPoiId.value == id.toString()) selectedPoiId.value = "";
-  } catch (error) {
-    alert("No se pudo eliminar.");
-  } finally {
-    loadingSave.value = false;
-  }
-};
-
-onMounted(() => {
-  cargarDatos();
-});
-</script>
-
 <template>
-  <div class="page-container">
-    <header class="header">
-      <h1>Análisis Espacial de Vuelos</h1>
-      <p class="subtitle">
-        Calcula distancias reales, verifica cercanía a zonas de interés y
-        visualiza trayectorias.
-      </p>
-    </header>
-
-    <div v-if="errorMsg" class="alert-error">{{ errorMsg }}</div>
-
-    <div class="control-panel">
-      <div class="panel-inputs">
-        <div class="form-group">
-          <label for="misionSelect">Seleccionar Misión:</label>
-          <select
-            id="misionSelect"
-            v-model="selectedMisionId"
-            class="select-input"
-          >
-            <option disabled value="">-- Elige una Misión --</option>
-            <option v-for="m in misiones" :key="m.idMision" :value="m.idMision">
-              ID {{ m.idMision }} - {{ m.estado }}
-            </option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="poiSelect">Seleccionar Punto de Interés:</label>
-          <select id="poiSelect" v-model="selectedPoiId" class="select-input">
-            <option disabled value="">-- Elige un POI --</option>
-            <option
-              v-for="p in puntosInteres"
-              :key="p.poi_id"
-              :value="p.poi_id"
-            >
-              {{ p.nombre }}
-            </option>
-          </select>
-        </div>
-      </div>
-
-      <div class="panel-actions">
-        <button class="btn btn-secondary" @click="showAdminPanel = true">
-          ⚙️ Gestionar POIs
-        </button>
-      </div>
-    </div>
-
-    <div class="cards-container">
-      <div class="card">
-        <div class="card-icon">📏</div>
-        <h3>Longitud Real de Vuelo</h3>
-        <p>Calcula la distancia total recorrida reconstruyendo la ruta 3D.</p>
-        <button
-          @click="calcularLongitudVuelo"
-          :disabled="loading || !selectedMisionId"
-          class="btn btn-primary"
-        >
-          {{ loading ? "Calculando..." : "Calcular Distancia" }}
-        </button>
-        <div v-if="resultadoDistanciaVuelo" class="result-box fade-in">
-          <span class="label">Total Recorrido:</span>
-          <span class="value">{{ resultadoDistanciaVuelo }}</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-icon">🎯</div>
-        <h3>Proximidad a POI</h3>
-        <p>Verifica la distancia mínima a la que pasó el dron.</p>
-        <button
-          @click="calcularProximidad"
-          :disabled="loadingProximidad || !selectedMisionId || !selectedPoiId"
-          class="btn btn-warning"
-        >
-          {{ loadingProximidad ? "Verificando..." : "Verificar Cercanía" }}
-        </button>
-        <div v-if="resultadoProximidad" class="result-box fade-in">
-          <span class="label">Distancia Mínima:</span>
-          <span class="value">{{ resultadoProximidad }}</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-icon">🗺️</div>
-        <h3>Trayectoria de Vuelo</h3>
-        <p>Proyectar la telemetría real sobre el mapa (Estilo HUD).</p>
-        <button
-          class="btn btn-info"
-          @click="verRutaEnMapa"
-          :disabled="!selectedMisionId"
-        >
-          👁️ Ver Ruta en Mapa
-        </button>
-      </div>
-    </div>
+  <div
+    class="map-container"
+    style="height: 100%; width: 100%; position: relative"
+  >
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
 
     <div
-      v-if="showAdminPanel"
-      class="modal-overlay"
-      @click.self="showAdminPanel = false"
-    >
-      <div class="modal-content modal-large">
-        <header class="modal-header">
-          <h2>
-            {{ isEditing ? "Editar Punto de Interés" : "Administrar Puntos" }}
-          </h2>
-          <button class="close-btn" @click="showAdminPanel = false">✕</button>
-        </header>
+      ref="mapContainer"
+      style="height: 100%; width: 100%; min-height: 300px; background: #eee"
+    ></div>
 
-        <div class="crud-layout">
-          <div class="crud-form">
-            <div class="form-row">
-              <div class="input-group">
-                <label>Nombre del Punto *</label>
-                <input
-                  type="text"
-                  v-model="poiForm.nombre"
-                  placeholder="Ej: Base Norte"
-                />
-              </div>
-              <div class="input-group">
-                <label>Descripción</label>
-                <input
-                  type="text"
-                  v-model="poiForm.descripcion"
-                  placeholder="Descripción corta"
-                />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="input-group">
-                <label>Latitud (Automático)</label>
-                <input
-                  type="number"
-                  v-model="poiForm.latitud"
-                  class="input-navy"
-                  step="any"
-                  placeholder="-33.000000"
-                />
-              </div>
-              <div class="input-group">
-                <label>Longitud (Automático)</label>
-                <input
-                  type="number"
-                  v-model="poiForm.longitud"
-                  class="input-navy"
-                  step="any"
-                  placeholder="-70.000000"
-                />
-              </div>
-            </div>
-
-            <div class="mini-map-container">
-              <label>📍 Haz clic en el mapa para ubicar el punto:</label>
-              <div class="mini-map-wrapper">
-                <ClientOnly fallback="Cargando mapa de selección...">
-                  <PtoInteresMap
-                    :puntos="[]"
-                    @map-click="onCoordenadaCapturada"
-                  />
-                </ClientOnly>
-              </div>
-            </div>
-
-            <div class="form-actions" style="margin-top: 15px">
-              <button
-                class="btn btn-success"
-                @click="guardarPunto"
-                :disabled="loadingSave"
-              >
-                {{
-                  loadingSave
-                    ? "Guardando..."
-                    : isEditing
-                      ? "Actualizar Punto"
-                      : "Crear Nuevo Punto"
-                }}
-              </button>
-              <button
-                class="btn btn-danger"
-                v-if="isEditing"
-                @click="resetForm"
-              >
-                Cancelar Edición
-              </button>
-            </div>
-          </div>
-
-          <div class="crud-list">
-            <h3>Puntos Existentes</h3>
-            <ul class="poi-list">
-              <li v-for="p in puntosInteres" :key="p.poi_id">
-                <div class="poi-info">
-                  <strong>{{ p.nombre }}</strong>
-                  <small
-                    >{{ p.latitud.toFixed(4) }},
-                    {{ p.longitud.toFixed(4) }}</small
-                  >
-                </div>
-                <div class="poi-actions">
-                  <button
-                    class="btn-icon edit"
-                    @click="editarPunto(p)"
-                    title="Editar"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    class="btn-icon delete"
-                    @click="eliminarPunto(p.poi_id)"
-                    title="Eliminar"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </div>
+    <div class="legend-overlay">
+      <div class="legend-item">
+        <span class="dot poi"></span> Puntos de Interés
       </div>
-    </div>
-
-    <div class="map-section">
-      <h2>Visualización Geográfica General</h2>
-      <div class="map-wrapper">
-        <ClientOnly fallback-tag="div" fallback="Cargando mapa...">
-          <PtoInteresMap
-            ref="mapaRef"
-            :misionId="selectedMisionId"
-            :poiId="selectedPoiId"
-            @map-click="onMapaClick"
-          />
-        </ClientOnly>
+      <div v-if="rutaLayer" class="legend-item">
+        <span class="dot route"></span> Ruta de Misión
       </div>
     </div>
   </div>
 </template>
 
+<script setup>
+import { ref, onMounted, watch, toRefs, onUnmounted } from "vue";
+
+const props = defineProps({
+  misionId: { type: [Number, String], default: null },
+  poiId: { type: [Number, String], default: null },
+  // Agregamos esto para evitar warnings si le pasas puntos vacíos desde el padre
+  puntos: { type: Array, default: () => [] },
+});
+
+// 1. DEFINIR EMITS (Para avisar al padre del clic) <--- NUEVO
+const emit = defineEmits(["map-click"]);
+
+const { misionId, poiId } = toRefs(props);
+
+// Referencia al div del mapa (Reemplaza al id="map-poi") <--- NUEVO
+const mapContainer = ref(null);
+
+// Vue Proxy rompe Leaflet. Usamos variables nativas de JS.
+let mapInstance = null;
+let L = null;
+let markers = {};
+let rutaLayer = null;
+let rutaVisualLayer = null;
+let rutaMarkers = [];
+
+const pois = ref([]);
+
+// --- PARSER WKT ---
+function parseWktToLatLng(wkt) {
+  if (!wkt) return null;
+  const clean = wkt.replace(/[^\d\s.-]/g, "").trim();
+  const parts = clean.split(/\s+/);
+  if (parts.length >= 2) {
+    const lon = parseFloat(parts[0]);
+    const lat = parseFloat(parts[1]);
+    if (isNaN(lat) || isNaN(lon)) return null;
+    return [lat, lon];
+  }
+  return null;
+}
+
+// --- ICONOS SVG PROFESIONALES ---
+function getIcon(tipo) {
+  if (!L) return null;
+  const isSelected = tipo === "selected";
+  const color = isSelected ? "#dc2626" : "#2563eb";
+  const size = isSelected ? 32 : 24;
+
+  const svgHtml = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" style="filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); transition: all 0.2s ease-in-out;">
+      <path fill="${color}" stroke="white" stroke-width="1.5" d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+      <circle cx="12" cy="10" r="3" fill="white"/>
+    </svg>
+  `;
+
+  return L.divIcon({
+    className: isSelected ? "leaflet-marker-selected" : "leaflet-marker-normal",
+    html: svgHtml,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
+    popupAnchor: [0, -size],
+  });
+}
+
+// --- CARGAR POIS ---
+async function fetchPois() {
+  try {
+    const data = await $fetch("/api/puntosInteres/all");
+    pois.value = data || [];
+
+    if (!mapInstance || !L) return;
+
+    Object.values(markers).forEach((m) => mapInstance.removeLayer(m));
+    markers = {};
+
+    pois.value.forEach((p) => {
+      const coords = parseWktToLatLng(p.ubicacionWKT);
+      if (coords) {
+        const marker = L.marker(coords, { icon: getIcon("normal") }).addTo(
+          mapInstance,
+        );
+        marker.bindPopup(`<b>${p.nombre}</b>`);
+        markers[p.poi_id] = marker;
+      }
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// --- DIBUJAR RUTA ---
+async function dibujarRuta(id) {
+  if (!id || !mapInstance || !L) return;
+  if (rutaLayer) {
+    mapInstance.removeLayer(rutaLayer);
+    rutaLayer = null;
+  }
+
+  try {
+    const data = await $fetch(`/api/telemetria/mision/${id}`);
+    if (!data || !Array.isArray(data) || data.length === 0) return;
+
+    const latlngs = data
+      .filter((d) => d.latitud != null && d.longitud != null)
+      .map((d) => [d.latitud, d.longitud]);
+
+    if (latlngs.length > 0) {
+      rutaLayer = L.polyline(latlngs, { color: "red", weight: 4 }).addTo(
+        mapInstance,
+      );
+      try {
+        const bounds = rutaLayer.getBounds();
+        if (bounds.isValid()) {
+          mapInstance.fitBounds(bounds, { padding: [50, 50] });
+        }
+      } catch (errZoom) {
+        console.warn("No se pudo ajustar el zoom a la ruta", errZoom);
+      }
+    }
+  } catch (e) {
+    console.error("Error al dibujar ruta:", e);
+  }
+}
+
+async function dibujarRutaVisual(idMision) {
+  if (!mapInstance || !L || !idMision) return;
+
+  if (rutaVisualLayer) {
+    mapInstance.removeLayer(rutaVisualLayer);
+    rutaVisualLayer = null;
+  }
+  rutaMarkers.forEach((m) => mapInstance.removeLayer(m));
+  rutaMarkers = [];
+
+  try {
+    const puntos = await $fetch(`/api/misiones/${idMision}/ruta`);
+    if (!puntos || puntos.length < 2) return;
+
+    const latlngs = puntos.map((p) => [p.latitud, p.longitud]);
+
+    const crearIconoSVG = (emoji) => {
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <text y="50%" x="50%" dominant-baseline="middle" text-anchor="middle" font-size="80">${emoji}</text>
+        </svg>`;
+      const urlImagen =
+        "data:image/svg+xml;base64," +
+        btoa(unescape(encodeURIComponent(svgString)));
+      return L.icon({
+        iconUrl: urlImagen,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+        popupAnchor: [0, -20],
+      });
+    };
+
+    const inicioIcon = crearIconoSVG("🛸");
+    const finIcon = crearIconoSVG("🏁");
+
+    rutaVisualLayer = L.polyline(latlngs, {
+      color: "#8B0000",
+      weight: 5,
+      opacity: 0.9,
+      dashArray: "10, 10",
+      lineCap: "round",
+    }).addTo(mapInstance);
+
+    const markerInicio = L.marker(latlngs[0], {
+      icon: inicioIcon,
+      zIndexOffset: 1000,
+    }).addTo(mapInstance);
+    const markerFin = L.marker(latlngs[latlngs.length - 1], {
+      icon: finIcon,
+      zIndexOffset: 1000,
+    }).addTo(mapInstance);
+
+    rutaMarkers.push(markerInicio, markerFin);
+    mapInstance.fitBounds(rutaVisualLayer.getBounds(), { padding: [50, 50] });
+  } catch (e) {
+    console.error("Error dibujando ruta visual:", e);
+  }
+}
+
+defineExpose({ dibujarRutaVisual });
+
+// --- WATCHERS ---
+watch(poiId, (newId) => {
+  if (!mapInstance || !L) return;
+  Object.values(markers).forEach((m) => m.setIcon(getIcon("normal")));
+  if (newId && markers[newId]) {
+    const m = markers[newId];
+    m.setIcon(getIcon("selected"));
+    m.openPopup();
+    mapInstance.setView(m.getLatLng(), 15);
+  }
+});
+
+watch(misionId, (newId) => {
+  if (newId) dibujarRuta(newId);
+});
+
+// --- MOUNTED ---
+onMounted(async () => {
+  // Esperamos un poco más para asegurar que el DOM pintó el div
+  await new Promise((r) => setTimeout(r, 200));
+
+  try {
+    const leafletModule = await import("leaflet");
+    L = leafletModule.default || leafletModule;
+
+    if (mapContainer.value) {
+      // 1. Inicializar mapa
+      mapInstance = L.map(mapContainer.value).setView([-33.437, -70.65], 10);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap",
+      }).addTo(mapInstance);
+
+      mapInstance.on("click", (e) => {
+        const { lat, lng } = e.latlng;
+        emit("map-click", { lat, lng });
+      });
+
+      // --- LA SOLUCIÓN DEFINITIVA PARA EL MAPA BLANCO ---
+      // Leaflet necesita saber que el div cambió de tamaño.
+      // Lo forzamos varias veces por si acaso hay animaciones de carga.
+      setTimeout(() => {
+        mapInstance.invalidateSize();
+      }, 100);
+      setTimeout(() => {
+        mapInstance.invalidateSize();
+      }, 500);
+      setTimeout(() => {
+        mapInstance.invalidateSize();
+      }, 1000);
+
+      await fetchPois();
+
+      if (misionId.value) dibujarRuta(misionId.value);
+    }
+  } catch (error) {
+    console.error("Error mapa:", error);
+  }
+});
+
+onUnmounted(() => {
+  if (mapInstance) mapInstance.remove();
+});
+</script>
+
 <style scoped>
-/* =========================================
-   1. CONFIGURACIÓN GENERAL (Tu base original)
-   ========================================= */
-.page-container {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 40px 20px;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  color: #e2e8f0;
-}
-
-.header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-.header h1 {
-  color: #f8fafc;
-  margin-bottom: 10px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-.subtitle {
-  color: #94a3b8;
-  font-size: 1.1rem;
-}
-
-/* --- ALERTAS --- */
-.alert-error {
-  background-color: rgba(220, 38, 38, 0.2);
-  color: #fca5a5;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  text-align: center;
-  border: 1px solid rgba(220, 38, 38, 0.5);
-}
-
-/* =========================================
-   2. PANEL DE CONTROLES (Actualizado para alinear botón)
-   ========================================= */
-.control-panel {
-  /* Tu estilo Glassmorphism original */
-  background-color: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(10px);
-  padding: 25px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-  margin-bottom: 30px;
-
-  /* NUEVO: Flexbox para separar inputs del botón derecho */
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-/* Grupo de la izquierda (Selects) */
-.panel-inputs {
-  display: flex;
-  gap: 20px;
-  flex: 1;
-  flex-wrap: wrap;
-}
-
-/* Grupo de la derecha (Botón Admin) */
-.panel-actions {
-  min-width: 180px; /* Ancho mínimo para el botón */
-}
-
-.form-group {
-  flex: 1;
-  min-width: 250px;
-  display: flex;
-  flex-direction: column;
-}
-
-label {
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #cbd5e1;
-}
-
-/* =========================================
-   3. INPUTS (Selects y Textos Unificados)
-   ========================================= */
-/* Aplicamos tu estilo a .select-input Y a todos los input normales */
-.select-input,
-input {
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 1rem;
-  background-color: #0f172a; /* Fondo oscuro */
-  color: #ffffff;
-  border: 1px solid #334155;
-  transition:
-    border-color 0.3s,
-    box-shadow 0.3s;
-  width: 100%; /* Asegura que llenen el espacio */
-  box-sizing: border-box; /* Evita que el padding rompa el ancho */
-}
-
-/* Estilo específico solo para selects (la flechita) */
-.select-input {
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
-  background-size: 1em;
-}
-
-.select-input:focus,
-input:focus {
-  outline: none;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
-}
-
-.input-navy {
-  background-color: #1e3a8a !important; /* Azul Marino */
-  color: #ffffff !important; /* Texto Blanco */
-  border: 1px solid #3b82f6 !important; /* Borde Azul Brillante */
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.input-navy:focus {
-  background-color: #172554 !important; /* Un poco más oscuro al hacer clic */
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4) !important;
-}
-
-/* =========================================
-   4. CARDS (Tu estilo original)
-   ========================================= */
-.cards-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
-  margin-bottom: 40px;
-}
-
-.card {
-  background-color: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 30px;
-  text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  transition:
-    transform 0.2s,
-    background-color 0.2s;
-
-  /* Para alinear los botones al fondo siempre */
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.card:hover {
-  transform: translateY(-5px);
-  background-color: rgba(30, 41, 59, 0.9);
-}
-
-.card-icon {
-  font-size: 3rem;
-  margin-bottom: 15px;
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
-}
-
-.card h3 {
-  margin-bottom: 10px;
-  color: #f1f5f9;
-}
-
-.card p {
-  color: #94a3b8;
-  margin-bottom: 20px;
-  font-size: 0.95rem;
-  flex-grow: 1; /* Empuja el botón hacia abajo */
-}
-
-/* =========================================
-   5. BOTONES (Extendidos)
-   ========================================= */
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+.map-container {
   width: 100%;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 0.9rem;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(1);
-}
-
-/* TUS BOTONES ORIGINALES */
-.btn-primary {
-  background-color: #2563eb;
-  color: white;
-  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
-}
-.btn-primary:hover:not(:disabled) {
-  background-color: #1d4ed8;
-}
-
-.btn-warning {
-  background-color: #d97706;
-  color: white;
-  box-shadow: 0 4px 6px rgba(217, 119, 6, 0.3);
-}
-.btn-warning:hover:not(:disabled) {
-  background-color: #b45309;
-}
-
-/* NUEVOS BOTONES */
-.btn-info {
-  /* Azul Cielo para Mapa */
-  background-color: #0ea5e9;
-  color: white;
-  box-shadow: 0 4px 6px rgba(14, 165, 233, 0.3);
-}
-.btn-info:hover {
-  background-color: #0284c7;
-}
-
-.btn-secondary {
-  /* Gris para Gestionar */
-  background-color: #475569;
-  color: white;
-}
-.btn-secondary:hover {
-  background-color: #334155;
-}
-
-.btn-success {
-  /* Verde para Guardar */
-  background-color: #10b981;
-  color: white;
-}
-.btn-success:hover {
-  background-color: #059669;
-}
-
-.btn-danger {
-  /* Rojo para Cancelar */
-  background-color: #ef4444;
-  color: white;
-}
-.btn-danger:hover {
-  background-color: #dc2626;
-}
-
-/* =========================================
-   6. RESULTADOS (Tu estilo original)
-   ========================================= */
-.result-box {
-  margin-top: 20px;
-  background-color: rgba(15, 23, 42, 0.6);
-  padding: 15px;
-  border-radius: 8px;
-  border-left: 5px solid #3b82f6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-/* Pequeña animación */
-.fade-in {
-  animation: fadeIn 0.5s ease-out;
-}
-
-.result-box .label {
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #60a5fa;
-}
-
-.result-box .value {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #ffffff;
-  margin-top: 5px;
-  text-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-}
-
-/* =========================================
-   7. MODAL / POPUP (NUEVO)
-   ========================================= */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.85); /* Fondo muy oscuro */
-  backdrop-filter: blur(5px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.modal-content {
-  background-color: #1e293b; /* Mismo gris azulado que tus paneles */
-  border: 1px solid #475569;
-  border-radius: 12px;
-  padding: 30px;
-  width: 90%;
-  max-width: 900px;
-  max-height: 90vh;
-  overflow-y: auto; /* Scroll si es muy alto */
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
-  animation: scaleUp 0.3s ease-out;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  border-bottom: 1px solid #334155;
-  padding-bottom: 15px;
-}
-.modal-header h2 {
-  margin: 0;
-  color: #38bdf8;
-}
-.close-btn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 1.5rem;
-  cursor: pointer;
-}
-.close-btn:hover {
-  color: #fff;
-}
-
-/* Layout Grid dentro del Modal (Form a la izq, Lista a la der) */
-.crud-layout {
-  display: grid;
-  grid-template-columns: 2fr 1fr; /* Formulario ancho, Lista estrecha */
-  gap: 30px;
-}
-@media (max-width: 768px) {
-  .crud-layout {
-    grid-template-columns: 1fr;
-  } /* Columna simple en movil */
-}
-
-/* Formulario */
-.crud-form .form-row {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 15px;
-}
-.crud-form .three-cols .input-group {
-  flex: 1;
-}
-.input-group {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-.input-group label {
-  font-size: 0.9rem;
-  color: #94a3b8;
-  margin-bottom: 5px;
-}
-
-.form-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 25px;
-}
-
-/* Lista Lateral */
-.crud-list {
-  background-color: rgba(15, 23, 42, 0.5);
-  padding: 15px;
-  border-radius: 8px;
-  max-height: 400px;
-  overflow-y: auto;
-  border: 1px solid #334155;
-}
-.crud-list h3 {
-  margin-top: 0;
-  font-size: 1.1rem;
-  color: #cbd5e1;
-  margin-bottom: 15px;
-}
-
-.poi-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.poi-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  border-bottom: 1px solid #334155;
-}
-.poi-list li:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.poi-info {
-  display: flex;
-  flex-direction: column;
-}
-.poi-info strong {
-  color: #e2e8f0;
-  font-size: 0.95rem;
-}
-.poi-info small {
-  color: #64748b;
-  font-size: 0.8rem;
-}
-
-.poi-actions {
-  display: flex;
-  gap: 5px;
-}
-.btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.1rem;
-  padding: 5px;
-  transition: transform 0.2s;
-}
-.btn-icon:hover {
-  transform: scale(1.2);
-}
-
-/* =========================================
-   8. MAPA (Ajustado para que NO se vea en blanco)
-   ========================================= */
-.map-section h2 {
-  color: #f1f5f9;
-  margin-bottom: 15px;
-}
-
-.map-wrapper {
-  display: block; /* Asegura que sea bloque */
-  width: 100%;
-  height: 600px !important; /* El !important fuerza la altura si o si */
-  background-color: #333; /* Un fondo gris para ver si carga el div aunque no cargue el mapa */
-}
-
-/* Contenedor del mapa pequeño dentro del modal */
-.mini-map-container {
-  margin-top: 10px;
-  border: 1px solid #475569; /* Ajusté el color al tema oscuro */
+  height: 600px; /* Altura fija en pixeles, no porcentajes */
+  position: relative;
+  background-color: #e5e7eb; /* Gris de fondo para ver si carga el contenedor */
   border-radius: 8px;
   overflow: hidden;
 }
 
-.mini-map-wrapper {
-  display: block;
+#map-poi {
   width: 100%;
-  height: 300px !important;
-  background-color: #333;
-}
-/* Ajuste para que el modal sea un poco más ancho */
-.modal-large {
-  max-width: 900px;
-  width: 95%;
+  height: 100%;
+  z-index: 1;
 }
 
-/* Animaciones */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.legend-overlay {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: white;
+  padding: 10px;
+  border-radius: 5px;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
 }
-@keyframes scaleUp {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
+
+.dot {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+.dot.poi {
+  background: #2563eb;
+}
+.dot.route {
+  background: #dc2626;
+}
+
+/* Reset para iconos de Leaflet */
+:deep(.leaflet-div-icon) {
+  background: transparent;
+  border: none;
+}
+
+/*
+  Esto
+  elimina
+  el
+  cuadrado
+  blanco
+  por
+  defecto
+  de
+  los
+  DivIcons
+  */
+:deep(.leaflet-marker-normal),
+:deep(.leaflet-marker-selected) {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Opcional: Un pequeño efecto al pasar el mouse por los marcadores normales */
+:deep(.leaflet-marker-normal:hover svg) {
+  transform: scale(1.1);
+  cursor: pointer;
+}
+
+/* Asegura que el seleccionado siempre se vea un poco más grande/resaltado */
+:deep(.leaflet-marker-selected svg) {
+  z-index: 1000; /* Traer al frente */
+}
+/* Esto elimina el cuadrado blanco por defecto de los DivIcons */
+:deep(.leaflet-marker-normal),
+:deep(.leaflet-marker-selected) {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Opcional: Un pequeño efecto al pasar el mouse por los marcadores normales */
+:deep(.leaflet-marker-normal:hover svg) {
+  transform: scale(1.1);
+  cursor: pointer;
+}
+
+/* Asegura que el seleccionado siempre se vea un poco más grande/resaltado */
+:deep(.leaflet-marker-selected svg) {
+  z-index: 1000; /* Traer al frente */
+}
+
+/* Esto elimina el cuadrado blanco por defecto de los DivIcons */
+:deep(.leaflet-marker-normal),
+:deep(.leaflet-marker-selected) {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Opcional: Un pequeño efecto al pasar el mouse por los marcadores normales */
+:deep(.leaflet-marker-normal:hover svg) {
+  transform: scale(1.1);
+  cursor: pointer;
+}
+
+/* Asegura que el seleccionado siempre se vea un poco más grande/resaltado */
+:deep(.leaflet-marker-selected svg) {
+  z-index: 1000; /* Traer al frente */
+}
+
+/* Usamos :deep porque Leaflet crea estos elementos fuera del template de Vue */
+:deep(.leaflet-div-icon.marker-limpio) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important; /* A veces el cuadrado es una sombra */
+}
+
+/* Aseguramos que el contenido interno tampoco tenga fondo */
+:deep(.marker-limpio div) {
+  background: transparent !important;
+  border: none !important;
+}
+</style>
+
+<style>
+/* ESTILO GLOBAL: TARJETA BLANCA */
+
+.leaflet-div-icon.marker-tarjeta-blanca {
+  /* 1. Fondo Blanco y Bordes */
+  background-color: #ffffff !important; /* Blanco puro */
+  border: 2px solid #e2e8f0 !important; /* Borde gris muy suave */
+  border-radius: 8px !important; /* Bordes redondeados (estético) */
+
+  /* 2. Centrado Perfecto del Emoji */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  /* 3. Tamaño del Emoji */
+  font-size: 20px !important; /* Tamaño controlado, no gigante */
+
+  /* 4. Sombra para dar profundidad (Efecto flotante) */
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+
+  /* 5. Quitamos cosas raras por defecto */
+  outline: none !important;
+}
+
+/* Efecto opcional: al pasar el mouse se levanta un poco */
+/* (Solo funcionará si no hay otros estilos bloqueando hover) */
+.leaflet-div-icon.marker-tarjeta-blanca:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1 !important;
 }
 </style>
