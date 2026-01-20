@@ -72,7 +72,10 @@ const poiForm = ref({
   descripcion: "",
   latitud: 0,
   longitud: 0,
+  altitud: 0,
 });
+
+const loadingAltitud = ref(false);
 
 // =========================================
 // 3. CARGA DE DATOS
@@ -121,17 +124,25 @@ const activarSeleccionMapa = () => {
   alert("Haz clic en el mapa de selección para ubicar el punto.");
 };
 
-const onCoordenadaCapturada = (coords: { lat: number; lng: number }) => {
-  // Sin el "if (isPickingLocation)", así el clic siempre funciona
+const onCoordenadaCapturada = async (coords: { lat: number; lng: number }) => {
+  // Actualizar coordenadas
   poiForm.value.latitud = parseFloat(coords.lat.toFixed(6));
   poiForm.value.longitud = parseFloat(coords.lng.toFixed(6));
 
-  // Opcional: Para ver en la consola que funcionó
-  console.log(
-    "Coordenada fijada:",
-    poiForm.value.latitud,
-    poiForm.value.longitud,
-  );
+  // Obtener elevación automáticamente
+  loadingAltitud.value = true;
+  try {
+    const data = await $fetch<{ elevation: number }>(
+      `/api/elevation/${poiForm.value.longitud}/${poiForm.value.latitud}`
+    );
+    poiForm.value.altitud = Math.round(data.elevation);
+    console.log("Altitud detectada:", poiForm.value.altitud, "m");
+  } catch (e) {
+    console.error("Error obteniendo elevación:", e);
+    poiForm.value.altitud = 0;
+  } finally {
+    loadingAltitud.value = false;
+  }
 };
 
 // =========================================
@@ -209,6 +220,7 @@ const resetForm = () => {
     descripcion: "",
     latitud: 0,
     longitud: 0,
+    altitud: 0,
   };
   isEditing.value = false;
   isPickingLocation.value = false;
@@ -221,6 +233,7 @@ const editarPunto = (poi: PuntoInteresUI) => {
     descripcion: poi.descripcion || "",
     latitud: poi.latitud,
     longitud: poi.longitud,
+    altitud: (poi as any).altitud || 0,
   };
   isEditing.value = true;
 };
@@ -247,6 +260,7 @@ const guardarPunto = async () => {
       descripcion: poiForm.value.descripcion || "", // Evitar nulls
       latitud: Number(poiForm.value.latitud),
       longitud: Number(poiForm.value.longitud),
+      altitud: Number(poiForm.value.altitud),
     };
 
     console.log("🚀 Enviando Payload:", payload);
@@ -457,6 +471,20 @@ onMounted(() => {
                   step="any"
                   placeholder="-70.000000"
                 />
+              </div>
+              <div class="input-group">
+                <label>Altitud (metros)</label>
+                <input
+                  type="number"
+                  v-model="poiForm.altitud"
+                  class="input-navy"
+                  step="1"
+                  placeholder="0"
+                  :disabled="loadingAltitud"
+                />
+                <small style="color: #64748b; font-size: 0.7rem; margin-top: 4px;">
+                  {{ loadingAltitud ? '⏳ Detectando...' : '✅ Automático o editable' }}
+                </small>
               </div>
             </div>
 

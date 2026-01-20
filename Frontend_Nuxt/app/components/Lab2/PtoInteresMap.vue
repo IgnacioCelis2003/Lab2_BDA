@@ -108,7 +108,41 @@ async function fetchPois() {
         const marker = L.marker(coords, { icon: getIcon("normal") }).addTo(
           mapInstance,
         );
-        marker.bindPopup(`<b>${p.nombre}</b>`);
+        
+        // Extraer altitud del WKT si existe (formato: POINT Z(lon lat alt))
+        let altitud = null;
+        if (p.ubicacionWKT) {
+          const clean = p.ubicacionWKT.replace(/[^\d\s.-]/g, "").trim();
+          const parts = clean.split(/\s+/);
+          if (parts.length >= 3) {
+            altitud = parseFloat(parts[2]);
+          }
+        }
+        
+        // Popup con coordenadas completas
+        const popupContent = `
+          <div style="min-width: 180px;">
+            <h4 style="margin: 0 0 8px 0; color: #1e40af; font-size: 1rem;">${p.nombre}</h4>
+            ${p.descripcion ? `<p style="margin: 0 0 8px 0; color: #475569; font-size: 0.85rem;">${p.descripcion}</p>` : ''}
+            <hr style="margin: 8px 0; border: 0; border-top: 1px solid #e2e8f0;">
+            <div style="font-size: 0.8rem; color: #334155;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <span>📍 Latitud:</span>
+                <strong>${coords[0].toFixed(6)}</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <span>📍 Longitud:</span>
+                <strong>${coords[1].toFixed(6)}</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span>⛰️ Altitud:</span>
+                <strong>${altitud !== null && !isNaN(altitud) ? altitud.toFixed(1) + ' m' : 'N/A'}</strong>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        marker.bindPopup(popupContent);
         markers[p.poi_id] = marker;
       }
     });
