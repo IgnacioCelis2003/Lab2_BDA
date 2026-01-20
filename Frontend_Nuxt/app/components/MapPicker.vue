@@ -55,6 +55,37 @@ Icon.Default.mergeOptions({
   shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
 });
 
+// Crear iconos personalizados para puntos de ruta
+function createRouteIcon(type: 'inicio' | 'fin') {
+  const color = type === 'inicio' ? '#22c55e' : '#ef4444'; // verde para inicio, rojo para fin
+  const label = type === 'inicio' ? 'A' : 'B';
+  
+  return L.divIcon({
+    className: 'custom-route-icon',
+    html: `<div style="
+      width: 28px;
+      height: 28px;
+      background: ${color};
+      border: 3px solid white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    ">
+      <span style="
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+        line-height: 1;
+      ">${label}</span>
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14]
+  });
+}
+
 // Parse WKT POLYGON((lng lat, ...)) -> [[lat, lng], ...]
 function parseWKT(wkt: string) {
   try {
@@ -142,11 +173,12 @@ onMounted(() => {
     if (props.mode === 'route') {
       // add or replace markers (keep up to 2)
       if (markers.length < 2) {
-        const m = L.marker([lat, lon], { draggable: true }).addTo(map!);
+        const pointType = markers.length === 0 ? 'inicio' : 'fin';
+        const icon = createRouteIcon(pointType);
+        const m = L.marker([lat, lon], { draggable: true, icon }).addTo(map!);
         m.on('dragend', onRouteMarkerDrag);
         markers.push(m);
         // Fetch elevation para el punto recién agregado
-        const pointType = markers.length === 1 ? 'inicio' : 'fin';
         fetchRouteElevation(lon, lat, pointType);
       } else {
         // replace second marker
@@ -249,5 +281,11 @@ function clearRoute() {
 /* Ensure leaflet map fills container */
 div[ref="mapRef"] {
   width: 100%;
+}
+
+/* Estilos para iconos de ruta personalizados */
+:deep(.custom-route-icon) {
+  background: transparent !important;
+  border: none !important;
 }
 </style>
